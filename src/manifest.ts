@@ -38,7 +38,7 @@ export async function getManifest() {
       'tabs',
       'storage',
       'activeTab',
-      'sidePanel',
+      'scripting',
     ],
     host_permissions: ['*://*/*'],
     content_scripts: [
@@ -65,18 +65,18 @@ export async function getManifest() {
     },
   }
 
-  // add sidepanel
-  if (isFirefox) {
-    manifest.sidebar_action = {
-      default_panel: 'dist/sidepanel/index.html',
-    }
-  }
-  else {
-    // the sidebar_action does not work for chromium based
-    (manifest as any).side_panel = {
-      default_path: 'dist/sidepanel/index.html',
-    }
-  }
+  // 注释掉侧边栏配置，优先使用popup
+  // if (isFirefox) {
+  //   manifest.sidebar_action = {
+  //     default_panel: 'dist/sidepanel/index.html',
+  //   }
+  // }
+  // else {
+  //   // the sidebar_action does not work for chromium based
+  //   (manifest as any).side_panel = {
+  //     default_path: 'dist/sidepanel/index.html',
+  //   }
+  // }
 
   // FIXME: not work in MV3
   if (isDev && false) {

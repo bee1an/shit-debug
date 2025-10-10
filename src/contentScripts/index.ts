@@ -13,6 +13,45 @@ import { setupApp } from '~/logic/common-setup'
     console.log(`[vitesse-webext] Navigate from page "${data.title}"`)
   })
 
+  // 处理iframe检测请求
+  onMessage('get-iframe-info', () => {
+    console.log('[vitesse-webext] Getting iframe info')
+
+    try {
+      // 获取页面中的所有iframe
+      const iframes = document.querySelectorAll('iframe')
+      const count = iframes.length
+
+      if (count === 0) {
+        return { count: 0 }
+      }
+
+      if (count > 1) {
+        return { count }
+      }
+
+      // 只有一个iframe的情况
+      const iframe = iframes[0] as HTMLIFrameElement
+      const src = iframe.src || ''
+
+      let hashContent = ''
+      if (src && src.includes('#')) {
+        const url = new URL(src)
+        hashContent = url.hash.slice(1) // 去掉#号
+      }
+
+      return {
+        count: 1,
+        src,
+        hashContent: hashContent || undefined,
+      }
+    }
+    catch (error) {
+      console.error('[vitesse-webext] Error getting iframe info:', error)
+      return { count: 0 }
+    }
+  })
+
   // mount component to context window
   const container = document.createElement('div')
   container.id = __NAME__
