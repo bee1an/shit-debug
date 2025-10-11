@@ -16,11 +16,14 @@ interface IframeInfo {
   count: number
   src?: string
   hashContent?: string
+  sessionStorageData?: any
 }
 
 export function useIframeDetector() {
   const isProcessing = ref(false)
   const message = ref('')
+  const copiedContent = ref('')
+  const sessionStorageData = ref<any>(null)
 
   /**
    * 获取当前页面的iframe信息
@@ -40,7 +43,7 @@ export function useIframeDetector() {
       // 使用chrome.scripting.executeScript直接在页面中执行代码
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: () => {
+        func: async () => {
           try {
             // 获取页面中的所有iframe
             const iframes = document.querySelectorAll('iframe')
@@ -61,13 +64,61 @@ export function useIframeDetector() {
             let hashContent = ''
             if (src && src.includes('#')) {
               const url = new URL(src)
-              hashContent = url.hash.slice(1) // 去掉#号
+              hashContent = url.hash // 保留#号
+            }
+
+            let sessionStorageData
+
+            try {
+              if (!sessionStorageData && iframe.contentWindow) {
+                sessionStorageData = await new Promise((resolve) => {
+                  const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+                  const handleMessage = (event: MessageEvent) => {
+                    if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
+                      // eslint-disable-next-line ts/no-use-before-define
+                      clearTimeout(timeout)
+                      window.removeEventListener('message', handleMessage)
+
+                      const response = event.data.data?.sessionStorageData
+                      if (response) {
+                        try {
+                          resolve(JSON.parse(response))
+                        }
+                        catch {
+                          resolve(response)
+                        }
+                      }
+                      else {
+                        resolve(undefined)
+                      }
+                    }
+                  }
+
+                  const timeout = setTimeout(() => {
+                    window.removeEventListener('message', handleMessage)
+                    resolve(undefined)
+                  }, 3000) // 3秒超时
+
+                  window.addEventListener('message', handleMessage)
+
+                  // 向iframe发送数据请求
+                  iframe.contentWindow?.postMessage({
+                    type: 'request_iframe_data',
+                    messageId,
+                    requiredKeys: ['SET_LOGIN_DATA'],
+                  }, '*')
+                })
+              }
+            }
+            catch (error) {
+              console.warn('获取iframe sessionStorage失败:', error)
             }
 
             return {
               count: 1,
               src,
               hashContent: hashContent || undefined,
+              sessionStorageData: sessionStorageData || undefined,
             }
           }
           catch (error) {
@@ -94,7 +145,14 @@ export function useIframeDetector() {
   async function copyToClipboard(text: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text)
+      copiedContent.value = text
       message.value = '已复制到剪切板'
+
+      // 保存到扩展存储中
+      await browser.storage.local.set({
+        lastCopiedContent: text,
+        copyTime: new Date().toISOString(),
+      })
     }
     catch (error) {
       console.error('复制失败:', error)
@@ -113,35 +171,52 @@ export function useIframeDetector() {
 
       if (iframeInfo.count === 0) {
         message.value = '当前页面没有找到iframe'
+        sessionStorageData.value = null
         return
       }
 
       if (iframeInfo.count > 1) {
         message.value = `找到 ${iframeInfo.count} 个iframe，请处理只有一个iframe的页面`
+        sessionStorageData.value = null
         return
       }
 
       // 只有一个iframe的情况
       if (iframeInfo.src) {
+        // 更新sessionStorage数据
+        sessionStorageData.value = iframeInfo.sessionStorageData || null
+
         if (iframeInfo.hashContent) {
           await copyToClipboard(iframeInfo.hashContent)
         }
         else {
           message.value = 'iframe链接不是hash路由'
         }
+
+        // 显示sessionStorage获取结果
+        if (iframeInfo.sessionStorageData) {
+          message.value = '成功获取iframe数据并复制内容到剪切板'
+        }
+        else {
+          message.value += ' (未找到SET_LOGIN_DATA数据)'
+        }
       }
       else {
         message.value = '无法获取iframe的src属性'
+        sessionStorageData.value = null
       }
     }
     catch (error) {
       message.value = error instanceof Error ? error.message : '操作失败'
+      sessionStorageData.value = null
     }
   }
 
   return {
     isProcessing: readonly(isProcessing),
     message: readonly(message),
+    copiedContent: readonly(copiedContent),
+    sessionStorageData: readonly(sessionStorageData),
     handleIframeDetection,
     copyToClipboard,
   }

@@ -63,3 +63,8 @@ onMessage('get-current-tab', async () => {
     }
   }
 })
+
+// 处理跨域iframe的sessionStorage获取请求（现在由content script处理）
+onMessage('get-iframe-session-storage', async () => {
+  return { success: false, error: '此功能已移至content script处理' }
+})

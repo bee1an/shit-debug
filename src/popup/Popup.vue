@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { useIframeDetector } from '~/composables/useIframeDetector'
 
-const { isProcessing, message, handleIframeDetection } = useIframeDetector()
+const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
+
+// 跳转到localhost:4000
+async function navigateToLocalhost() {
+  if (copiedContent.value) {
+    const url = `http://localhost:4000${copiedContent.value}`
+    await browser.tabs.create({ url })
+  }
+}
 </script>
 
 <template>
@@ -40,6 +48,47 @@ const { isProcessing, message, handleIframeDetection } = useIframeDetector()
         }"
       >
         {{ message }}
+      </div>
+
+      <!-- 复制内容展示区域 -->
+      <div
+        v-if="copiedContent"
+        class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+      >
+        <div class="text-xs text-gray-500 mb-1">
+          复制的内容:
+        </div>
+        <div class="text-sm font-mono text-gray-800 break-all p-2 bg-white rounded border">
+          {{ copiedContent }}
+        </div>
+
+        <!-- sessionStorage数据展示 -->
+        <div
+          v-if="sessionStorageData"
+          class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded"
+        >
+          <div class="text-xs text-blue-600 mb-1">
+            iframe中的SET_LOGIN_DATA:
+          </div>
+          <div class="text-xs font-mono text-blue-800 break-all">
+            {{
+              typeof sessionStorageData === 'object'
+                ? JSON.stringify(sessionStorageData, null, 2)
+                : sessionStorageData
+            }}
+          </div>
+        </div>
+
+        <!-- 跳转按钮 -->
+        <button
+          class="btn mt-3 w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
+          @click="navigateToLocalhost"
+        >
+          <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          跳转到 localhost:4000
+        </button>
       </div>
     </div>
 
