@@ -1,8 +1,4 @@
-/**
- * iframe检测和处理相关的Composable
- */
-
-// 为Chrome API添加类型声明
+// Chrome API类型声明
 declare const chrome: {
   scripting: {
     executeScript: (params: {
@@ -24,28 +20,21 @@ export function useIframeDetector() {
   const message = ref('')
   const copiedContent = ref('')
   const sessionStorageData = ref<any>(null)
-
-  /**
-   * 获取当前页面的iframe信息
-   */
   async function getIframeInfo(): Promise<IframeInfo> {
     try {
       isProcessing.value = true
       message.value = '正在检测页面中的iframe...'
 
-      // 获取当前活动标签页
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
 
       if (!tab.id) {
         throw new Error('无法获取当前标签页信息')
       }
 
-      // 使用chrome.scripting.executeScript直接在页面中执行代码
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: async () => {
           try {
-            // 获取页面中的所有iframe
             const iframes = document.querySelectorAll('iframe')
             const count = iframes.length
 
@@ -57,14 +46,13 @@ export function useIframeDetector() {
               return { count }
             }
 
-            // 只有一个iframe的情况
             const iframe = iframes[0] as HTMLIFrameElement
             const src = iframe.src || ''
 
             let hashContent = ''
             if (src && src.includes('#')) {
               const url = new URL(src)
-              hashContent = url.hash // 保留#号
+              hashContent = url.hash
             }
 
             let sessionStorageData
@@ -75,7 +63,6 @@ export function useIframeDetector() {
                   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
                   const handleMessage = (event: MessageEvent) => {
                     if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
-                      // eslint-disable-next-line ts/no-use-before-define
                       clearTimeout(timeout)
                       window.removeEventListener('message', handleMessage)
 
@@ -97,11 +84,10 @@ export function useIframeDetector() {
                   const timeout = setTimeout(() => {
                     window.removeEventListener('message', handleMessage)
                     resolve(undefined)
-                  }, 3000) // 3秒超时
+                  }, 3000)
 
                   window.addEventListener('message', handleMessage)
 
-                  // 向iframe发送数据请求
                   iframe.contentWindow?.postMessage({
                     type: 'request_iframe_data',
                     messageId,
@@ -111,7 +97,7 @@ export function useIframeDetector() {
               }
             }
             catch (error) {
-              console.warn('获取iframe sessionStorage失败:', error)
+              // 获取iframe sessionStorage失败
             }
 
             return {
@@ -122,7 +108,6 @@ export function useIframeDetector() {
             }
           }
           catch (error) {
-            console.error('Error getting iframe info:', error)
             return { count: 0 }
           }
         },
@@ -131,7 +116,6 @@ export function useIframeDetector() {
       return (result.result as IframeInfo) || { count: 0 }
     }
     catch (error) {
-      console.error('获取iframe信息失败:', error)
       throw new Error(error instanceof Error ? error.message : '未知错误')
     }
     finally {
@@ -139,30 +123,21 @@ export function useIframeDetector() {
     }
   }
 
-  /**
-   * 复制文本到剪切板
-   */
   async function copyToClipboard(text: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text)
       copiedContent.value = text
       message.value = '已复制到剪切板'
 
-      // 保存到扩展存储中
       await browser.storage.local.set({
         lastCopiedContent: text,
         copyTime: new Date().toISOString(),
       })
     }
     catch (error) {
-      console.error('复制失败:', error)
       throw new Error('复制到剪切板失败')
     }
   }
-
-  /**
-   * 处理iframe检测的主要逻辑
-   */
   async function handleIframeDetection(): Promise<void> {
     try {
       message.value = ''
@@ -181,9 +156,7 @@ export function useIframeDetector() {
         return
       }
 
-      // 只有一个iframe的情况
       if (iframeInfo.src) {
-        // 更新sessionStorage数据
         sessionStorageData.value = iframeInfo.sessionStorageData || null
 
         if (iframeInfo.hashContent) {
@@ -193,7 +166,6 @@ export function useIframeDetector() {
           message.value = 'iframe链接不是hash路由'
         }
 
-        // 显示sessionStorage获取结果
         if (iframeInfo.sessionStorageData) {
           message.value = '成功获取iframe数据并复制内容到剪切板'
         }

@@ -3,21 +3,14 @@ import { useIframeDetector } from '~/composables/useIframeDetector'
 
 const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
 
-// 跳转到localhost:4000并传递sessionStorage数据
 async function navigateToLocalhost() {
-  if (!copiedContent.value) {
-    return
-  }
+  if (!copiedContent.value) return
 
   const url = `http://localhost:4000${copiedContent.value}`
-  // 先创建新标签页
   const tab = await browser.tabs.create({ url, active: false })
 
-  if (!tab.id) {
-    return
-  }
+  if (!tab.id) return
 
-  // 等待页面加载完成
   await new Promise((resolve) => {
     const listener = (updatedTabId: number, changeInfo: any) => {
       if (updatedTabId === tab.id && changeInfo.status === 'complete') {
@@ -28,27 +21,21 @@ async function navigateToLocalhost() {
     browser.tabs.onUpdated.addListener(listener)
   })
 
-  // 注入sessionStorage数据到新页面
   if (sessionStorageData.value) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: (data: any) => {
-          // 将数据存储到sessionStorage
-          sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data,
-          )
-
-          console.log('SessionStorage数据已注入到新页面:', data)
+          sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
         },
         args: [sessionStorageData.value],
       })
     }
     catch (error) {
-      console.error('注入sessionStorage失败:', error)
+      // 注入失败
     }
   }
 
-  // 激活标签页
   await browser.tabs.update(tab.id, { active: true })
 }
 </script>
@@ -62,8 +49,6 @@ async function navigateToLocalhost() {
     <div class="text-sm mb-2 text-gray-500">
       仅在页面只有一个iframe时生效
     </div>
-    <!-- <SharedSubtitle /> -->
-
     <div class="mt-4 space-y-3">
       <button
         class="btn w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -80,7 +65,6 @@ async function navigateToLocalhost() {
         <span v-else>检测页面 iframe</span>
       </button>
 
-      <!-- 消息显示区域 -->
       <div
         v-if="message"
         class="p-3 rounded-lg text-sm break-words"
@@ -94,26 +78,20 @@ async function navigateToLocalhost() {
         {{ message }}
       </div>
 
-      <!-- 复制内容展示区域 -->
       <div
         v-if="copiedContent"
         class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
       >
-        <div class="text-xs text-gray-500 mb-1">
-          复制的内容:
-        </div>
+        <div class="text-xs text-gray-500 mb-1">复制的内容:</div>
         <div class="text-sm font-mono text-gray-800 break-all p-2 bg-white rounded border">
           {{ copiedContent }}
         </div>
 
-        <!-- sessionStorage数据展示 -->
         <div
           v-if="sessionStorageData"
           class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded"
         >
-          <div class="text-xs text-blue-600 mb-1">
-            iframe中的SET_LOGIN_DATA:
-          </div>
+          <div class="text-xs text-blue-600 mb-1">iframe中的SET_LOGIN_DATA:</div>
           <div class="text-xs font-mono text-blue-800 break-all">
             {{
               typeof sessionStorageData === 'object'
@@ -123,7 +101,6 @@ async function navigateToLocalhost() {
           </div>
         </div>
 
-        <!-- 跳转按钮 -->
         <button
           class="btn mt-3 w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
           :disabled="!copiedContent"
@@ -136,14 +113,5 @@ async function navigateToLocalhost() {
         </button>
       </div>
     </div>
-
-    <!-- <div class="mt-6 pt-4 border-t border-gray-200">
-      <button class="btn text-sm text-gray-600 hover:text-gray-800" @click="openOptionsPage">
-        打开设置
-      </button>
-      <div class="mt-2 text-xs text-gray-400">
-        <span class="opacity-50">Storage:</span> {{ storageDemo }}
-      </div>
-    </div> -->
   </main>
 </template>

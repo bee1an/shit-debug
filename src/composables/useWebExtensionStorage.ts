@@ -71,7 +71,7 @@ export function useWebExtensionStorage<T>(
     shallow,
     eventFilter,
     onError = (e) => {
-      console.error(e)
+      // Error occurred
     },
   } = options
 

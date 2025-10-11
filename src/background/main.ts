@@ -1,7 +1,6 @@
 import { onMessage, sendMessage } from 'webext-bridge/background'
 import type { Tabs } from 'webextension-polyfill'
 
-// only on dev mode
 if (import.meta.hot) {
   // @ts-expect-error for background HMR
   import('/@vite/client')
@@ -9,26 +8,10 @@ if (import.meta.hot) {
   import('./contentScriptHMR')
 }
 
-// remove or turn this off if you don't use side panel
-const USE_SIDE_PANEL = true
-
-// to toggle the sidepanel with the action button in chromium:
-if (USE_SIDE_PANEL) {
-  // @ts-expect-error missing types
-  browser.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error: unknown) => console.error(error))
-}
-
-browser.runtime.onInstalled.addListener((): void => {
-  // eslint-disable-next-line no-console
-  console.log('Extension installed')
-})
+browser.runtime.onInstalled.addListener((): void => {})
 
 let previousTabId = 0
 
-// communication example: send previous tab title from background page
-// see shim.d.ts for type declaration
 browser.tabs.onActivated.addListener(async ({ tabId }) => {
   if (!previousTabId) {
     previousTabId = tabId
@@ -45,26 +28,19 @@ browser.tabs.onActivated.addListener(async ({ tabId }) => {
     return
   }
 
-  // eslint-disable-next-line no-console
-  console.log('previous tab', tab)
   sendMessage('tab-prev', { title: tab.title }, { context: 'content-script', tabId })
 })
 
 onMessage('get-current-tab', async () => {
   try {
     const tab = await browser.tabs.get(previousTabId)
-    return {
-      title: tab?.title,
-    }
+    return { title: tab?.title }
   }
   catch {
-    return {
-      title: undefined,
-    }
+    return { title: undefined }
   }
 })
 
-// 处理跨域iframe的sessionStorage获取请求（现在由content script处理）
 onMessage('get-iframe-session-storage', async () => {
   return { success: false, error: '此功能已移至content script处理' }
 })
