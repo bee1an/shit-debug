@@ -4,12 +4,14 @@ import { useIframeDetector } from '~/composables/useIframeDetector'
 const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
 
 async function navigateToLocalhost() {
-  if (!copiedContent.value) return
+  if (!copiedContent.value)
+    return
 
   const url = `http://localhost:4000${copiedContent.value}`
   const tab = await browser.tabs.create({ url, active: false })
 
-  if (!tab.id) return
+  if (!tab.id)
+    return
 
   await new Promise((resolve) => {
     const listener = (updatedTabId: number, changeInfo: any) => {
@@ -82,7 +84,9 @@ async function navigateToLocalhost() {
         v-if="copiedContent"
         class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
       >
-        <div class="text-xs text-gray-500 mb-1">复制的内容:</div>
+        <div class="text-xs text-gray-500 mb-1">
+          复制的内容:
+        </div>
         <div class="text-sm font-mono text-gray-800 break-all p-2 bg-white rounded border">
           {{ copiedContent }}
         </div>
@@ -91,7 +95,9 @@ async function navigateToLocalhost() {
           v-if="sessionStorageData"
           class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded"
         >
-          <div class="text-xs text-blue-600 mb-1">iframe中的SET_LOGIN_DATA:</div>
+          <div class="text-xs text-blue-600 mb-1">
+            iframe中的SET_LOGIN_DATA:
+          </div>
           <div class="text-xs font-mono text-blue-800 break-all">
             {{
               typeof sessionStorageData === 'object'

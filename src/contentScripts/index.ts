@@ -1,40 +1,41 @@
-import { onMessage } from 'webext-bridge/content-script'
+// import { onMessage } from 'webext-bridge/content-script'
 
 (() => {
-  onMessage('tab-prev', ({ data }) => {
-    // Handle tab navigation from background
-  })
 
-  onMessage('get-iframe-info', () => {
-    try {
-      const iframes = document.querySelectorAll('iframe')
-      const count = iframes.length
+  // onMessage('tab-prev', ({ data }) => {
+  //   // Handle tab navigation from background
+  // })
 
-      if (count === 0) {
-        return { count: 0 }
-      }
+  // onMessage('get-iframe-info', () => {
+  //   try {
+  //     const iframes = document.querySelectorAll('iframe')
+  //     const count = iframes.length
 
-      if (count > 1) {
-        return { count }
-      }
+  //     if (count === 0) {
+  //       return { count: 0 }
+  //     }
 
-      const iframe = iframes[0] as HTMLIFrameElement
-      const src = iframe.src || ''
+  //     if (count > 1) {
+  //       return { count }
+  //     }
 
-      let hashContent = ''
-      if (src && src.includes('#')) {
-        const url = new URL(src)
-        hashContent = url.hash.slice(1)
-      }
+  //     const iframe = iframes[0] as HTMLIFrameElement
+  //     const src = iframe.src || ''
 
-      return {
-        count: 1,
-        src,
-        hashContent: hashContent || undefined,
-      }
-    }
-    catch (error) {
-      return { count: 0 }
-    }
-  })
+  //     let hashContent = ''
+  //     if (src && src.includes('#')) {
+  //       const url = new URL(src)
+  //       hashContent = url.hash.slice(1)
+  //     }
+
+  //     return {
+  //       count: 1,
+  //       src,
+  //       hashContent: hashContent || undefined,
+  //     }
+  //   }
+  //   catch (error) {
+  //     return { count: 0 }
+  //   }
+  // })
 })()
