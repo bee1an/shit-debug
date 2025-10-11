@@ -3,12 +3,53 @@ import { useIframeDetector } from '~/composables/useIframeDetector'
 
 const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
 
-// 跳转到localhost:4000
+// 跳转到localhost:4000并传递sessionStorage数据
 async function navigateToLocalhost() {
-  if (copiedContent.value) {
-    const url = `http://localhost:4000${copiedContent.value}`
-    await browser.tabs.create({ url })
+  if (!copiedContent.value) {
+    return
   }
+
+  const url = `http://localhost:4000${copiedContent.value}`
+  // 先创建新标签页
+  const tab = await browser.tabs.create({ url, active: false })
+
+  if (!tab.id) {
+    return
+  }
+
+  // 等待页面加载完成
+  await new Promise((resolve) => {
+    const listener = (updatedTabId: number, changeInfo: any) => {
+      if (updatedTabId === tab.id && changeInfo.status === 'complete') {
+        browser.tabs.onUpdated.removeListener(listener)
+        resolve(void 0)
+      }
+    }
+    browser.tabs.onUpdated.addListener(listener)
+  })
+
+  // 注入sessionStorage数据到新页面
+  if (sessionStorageData.value) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (data: any) => {
+          // 将数据存储到sessionStorage
+          sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data,
+          )
+
+          console.log('SessionStorage数据已注入到新页面:', data)
+        },
+        args: [sessionStorageData.value],
+      })
+    }
+    catch (error) {
+      console.error('注入sessionStorage失败:', error)
+    }
+  }
+
+  // 激活标签页
+  await browser.tabs.update(tab.id, { active: true })
 }
 </script>
 
@@ -82,12 +123,13 @@ async function navigateToLocalhost() {
         <!-- 跳转按钮 -->
         <button
           class="btn mt-3 w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
+          :disabled="!copiedContent"
           @click="navigateToLocalhost"
         >
           <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
-          跳转到 localhost:4000
+          {{ sessionStorageData ? '跳转并传递登录数据' : '跳转到 localhost:4000' }}
         </button>
       </div>
     </div>
