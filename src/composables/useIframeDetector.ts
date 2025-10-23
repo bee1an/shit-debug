@@ -61,6 +61,13 @@ export function useIframeDetector() {
               if (!sessionStorageData && iframe.contentWindow) {
                 sessionStorageData = await new Promise((resolve) => {
                   const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+
+                  const timeout = setTimeout(() => {
+                    // eslint-disable-next-line ts/no-use-before-define
+                    window.removeEventListener('message', handleMessage)
+                    resolve(undefined)
+                  }, 3000)
+
                   const handleMessage = (event: MessageEvent) => {
                     if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
                       clearTimeout(timeout)
@@ -81,11 +88,6 @@ export function useIframeDetector() {
                     }
                   }
 
-                  const timeout = setTimeout(() => {
-                    window.removeEventListener('message', handleMessage)
-                    resolve(undefined)
-                  }, 3000)
-
                   window.addEventListener('message', handleMessage)
 
                   iframe.contentWindow?.postMessage({
@@ -96,7 +98,7 @@ export function useIframeDetector() {
                 })
               }
             }
-            catch (error) {
+            catch {
               // 获取iframe sessionStorage失败
             }
 
@@ -107,7 +109,7 @@ export function useIframeDetector() {
               sessionStorageData: sessionStorageData || undefined,
             }
           }
-          catch (error) {
+          catch {
             return { count: 0 }
           }
         },
@@ -134,7 +136,7 @@ export function useIframeDetector() {
         copyTime: new Date().toISOString(),
       })
     }
-    catch (error) {
+    catch {
       throw new Error('复制到剪切板失败')
     }
   }
@@ -185,10 +187,10 @@ export function useIframeDetector() {
   }
 
   return {
-    isProcessing: readonly(isProcessing),
-    message: readonly(message),
-    copiedContent: readonly(copiedContent),
-    sessionStorageData: readonly(sessionStorageData),
+    isProcessing,
+    message,
+    copiedContent,
+    sessionStorageData,
     handleIframeDetection,
     copyToClipboard,
   }

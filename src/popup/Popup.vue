@@ -1,7 +1,42 @@
 <script setup lang="ts">
 import { useIframeDetector } from '~/composables/useIframeDetector'
 
+// Chrome API类型声明
+declare const chrome: {
+  scripting: {
+    executeScript: (params: {
+      target: { tabId: number }
+      func: (...args: any[]) => any
+      args?: any[]
+    }) => Promise<Array<{ result: any }>>
+  }
+}
+
 const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
+
+async function blockAds() {
+  try {
+    const expireTime = Math.floor((Date.now() + (8 * 60 * 60 * 1000)) / 1000) // 当前时间+8小时的时间戳
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+
+    if (!tab.id) {
+      message.value = '无法获取当前标签页信息'
+      return
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (expireTime: string) => {
+        localStorage.setItem('adExpire2', expireTime)
+      },
+      args: [expireTime.toString()],
+    })
+    message.value = '广告屏蔽已激活，有效期8小时'
+  }
+  catch {
+    message.value = '广告屏蔽激活失败'
+  }
+}
 
 async function navigateToLocalhost() {
   if (!copiedContent.value)
@@ -33,7 +68,7 @@ async function navigateToLocalhost() {
         args: [sessionStorageData.value],
       })
     }
-    catch (error) {
+    catch {
       // 注入失败
     }
   }
@@ -65,6 +100,18 @@ async function navigateToLocalhost() {
           检测中...
         </span>
         <span v-else>检测页面 iframe</span>
+      </button>
+
+      <button
+        class="btn w-full py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200"
+        @click="blockAds"
+      >
+        <span class="flex items-center justify-center">
+          <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          屏蔽广告
+        </span>
       </button>
 
       <div
