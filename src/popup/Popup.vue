@@ -12,7 +12,7 @@ declare const chrome: {
   }
 }
 
-const { isProcessing, message, copiedContent, sessionStorageData, handleIframeDetection } = useIframeDetector()
+const { isProcessing, message, copiedContent, sessionStorageData, iframeList, selectedIframe, handleIframeDetection, selectIframe } = useIframeDetector()
 
 async function blockAds() {
   try {
@@ -79,14 +79,8 @@ async function navigateToLocalhost() {
 
 <template>
   <main class="w-[350px] px-4 py-5 text-center text-gray-700">
-    <Logo />
-    <div class="text-lg font-semibold mb-2">
-      shit debug
-    </div>
-    <div class="text-sm mb-2 text-gray-500">
-      仅在页面只有一个iframe时生效
-    </div>
-    <div class="mt-4 space-y-3">
+    <!-- <Logo /> -->
+    <div class="space-y-3">
       <button
         class="btn w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="isProcessing"
@@ -110,7 +104,7 @@ async function navigateToLocalhost() {
           <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
           </svg>
-          屏蔽广告
+          屏蔽 uview-plus 弹窗广告
         </span>
       </button>
 
@@ -127,31 +121,62 @@ async function navigateToLocalhost() {
         {{ message }}
       </div>
 
+      <!-- iframe 列表 -->
+      <div
+        v-if="iframeList.length > 1"
+        class="p-3 bg-gray-50 border border-gray-200 rounded-lg"
+      >
+        <div class="text-sm font-medium mb-2 text-gray-700">
+          选择 iframe ({{ iframeList.length }} 个)
+        </div>
+        <div class="space-y-1 max-h-40 overflow-y-auto">
+          <button
+            v-for="iframe in iframeList"
+            :key="iframe.index"
+            class="w-full px-2 py-1 text-left text-xs border rounded transition-colors duration-200 truncate"
+            :class="{
+              'bg-blue-50 border-blue-300 text-blue-700': selectedIframe?.index === iframe.index,
+              'bg-white border-gray-200 hover:bg-gray-50': selectedIframe?.index !== iframe.index,
+            }"
+            :title="iframe.hashContent || '无hash内容'"
+            @click="selectIframe(iframe)"
+          >
+            <span class="font-medium">iframe {{ iframe.index + 1 }}</span>
+            <span
+              v-if="iframe.hashContent"
+              class="ml-1 text-green-600"
+            >
+              ✓
+            </span>
+            <span
+              v-if="iframe.sessionStorageData"
+              class="ml-1 text-blue-600"
+            >
+              ✓
+            </span>
+            <span
+              v-if="iframe.hashContent"
+              class="ml-1 text-gray-600 truncate"
+              :title="iframe.hashContent"
+            >
+              {{ iframe.hashContent }}
+            </span>
+            <span
+              v-else
+              class="ml-1 text-gray-400"
+            >
+              无hash
+            </span>
+          </button>
+        </div>
+      </div>
+
       <div
         v-if="copiedContent"
         class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
       >
-        <div class="text-xs text-gray-500 mb-1">
-          复制的内容:
-        </div>
-        <div class="text-sm font-mono text-gray-800 break-all p-2 bg-white rounded border">
-          {{ copiedContent }}
-        </div>
-
-        <div
-          v-if="sessionStorageData"
-          class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded"
-        >
-          <div class="text-xs text-blue-600 mb-1">
-            iframe中的SET_LOGIN_DATA:
-          </div>
-          <div class="text-xs font-mono text-blue-800 break-all">
-            {{
-              typeof sessionStorageData === 'object'
-                ? JSON.stringify(sessionStorageData, null, 2)
-                : sessionStorageData
-            }}
-          </div>
+        <div class="text-xs text-gray-500 mb-1 flex-shrink-0">
+          {{ copiedContent.split('?')[0] }}
         </div>
 
         <button

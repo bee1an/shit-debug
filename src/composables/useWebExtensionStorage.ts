@@ -70,7 +70,7 @@ export function useWebExtensionStorage<T>(
     mergeDefaults = false,
     shallow,
     eventFilter,
-    onError = (e) => {
+    onError = (_e) => {
       // Error occurred
     },
   } = options

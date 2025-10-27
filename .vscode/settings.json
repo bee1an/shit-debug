@@ -9,5 +9,9 @@
   },
   "files.associations": {
     "*.css": "postcss"
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "AGENTS.md": "AGENTS.md, CLAUDE.md"
   }
 }

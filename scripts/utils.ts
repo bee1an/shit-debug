@@ -7,6 +7,6 @@ export const r = (...args: string[]) => resolve(__dirname, '..', ...args)
 export const isDev = process.env.NODE_ENV !== 'production'
 export const isFirefox = process.env.EXTENSION === 'firefox'
 
-export function log(name: string, message: string) {
+export function log(_name: string, _message: string) {
   // console.log(black(bgCyan(` ${name} `)), message)
 }

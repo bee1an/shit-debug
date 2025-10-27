@@ -9,10 +9,15 @@ declare const chrome: {
 }
 
 interface IframeInfo {
-  count: number
+  index: number
   src?: string
   hashContent?: string
   sessionStorageData?: any
+}
+
+interface IframeDetectionResult {
+  count: number
+  iframes: IframeInfo[]
 }
 
 export function useIframeDetector() {
@@ -20,7 +25,9 @@ export function useIframeDetector() {
   const message = ref('')
   const copiedContent = ref('')
   const sessionStorageData = ref<any>(null)
-  async function getIframeInfo(): Promise<IframeInfo> {
+  const iframeList = ref<IframeInfo[]>([])
+  const selectedIframe = ref<IframeInfo | null>(null)
+  async function getIframeInfo(): Promise<IframeDetectionResult> {
     try {
       isProcessing.value = true
       message.value = '正在检测页面中的iframe...'
@@ -39,83 +46,94 @@ export function useIframeDetector() {
             const count = iframes.length
 
             if (count === 0) {
-              return { count: 0 }
+              return { count: 0, iframes: [] }
             }
 
-            if (count > 1) {
-              return { count }
-            }
+            const iframeResults: IframeInfo[] = []
 
-            const iframe = iframes[0] as HTMLIFrameElement
-            const src = iframe.src || ''
+            // 获取所有iframe的信息
+            for (let i = 0; i < iframes.length; i++) {
+              const iframe = iframes[i] as HTMLIFrameElement
+              const src = iframe.src || ''
 
-            let hashContent = ''
-            if (src && src.includes('#')) {
-              const url = new URL(src)
-              hashContent = url.hash
-            }
+              let hashContent = ''
+              if (src && src.includes('#')) {
+                try {
+                  const url = new URL(src)
+                  hashContent = url.hash
+                }
+                catch {
+                  // URL解析失败，跳过hash提取
+                }
+              }
 
-            let sessionStorageData
+              let sessionStorageData
 
-            try {
-              if (!sessionStorageData && iframe.contentWindow) {
-                sessionStorageData = await new Promise((resolve) => {
-                  const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+              try {
+                if (iframe.contentWindow) {
+                  sessionStorageData = await new Promise((resolve) => {
+                    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
 
-                  const timeout = setTimeout(() => {
-                    // eslint-disable-next-line ts/no-use-before-define
-                    window.removeEventListener('message', handleMessage)
-                    resolve(undefined)
-                  }, 3000)
-
-                  const handleMessage = (event: MessageEvent) => {
-                    if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
-                      clearTimeout(timeout)
+                    const timeout = setTimeout(() => {
+                      // eslint-disable-next-line ts/no-use-before-define
                       window.removeEventListener('message', handleMessage)
+                      resolve(undefined)
+                    }, 3000)
 
-                      const response = event.data.data?.sessionStorageData
-                      if (response) {
-                        try {
-                          resolve(JSON.parse(response))
+                    const handleMessage = (event: MessageEvent) => {
+                      if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
+                        clearTimeout(timeout)
+                        window.removeEventListener('message', handleMessage)
+
+                        const response = event.data.data?.sessionStorageData
+                        if (response) {
+                          try {
+                            resolve(JSON.parse(response))
+                          }
+                          catch {
+                            resolve(response)
+                          }
                         }
-                        catch {
-                          resolve(response)
+                        else {
+                          resolve(undefined)
                         }
-                      }
-                      else {
-                        resolve(undefined)
                       }
                     }
-                  }
 
-                  window.addEventListener('message', handleMessage)
+                    window.addEventListener('message', handleMessage)
 
-                  iframe.contentWindow?.postMessage({
-                    type: 'request_iframe_data',
-                    messageId,
-                    requiredKeys: ['SET_LOGIN_DATA'],
-                  }, '*')
-                })
+                    iframe.contentWindow?.postMessage({
+                      type: 'request_iframe_data',
+                      messageId,
+                      requiredKeys: ['SET_LOGIN_DATA'],
+                    }, '*')
+                  })
+                }
               }
-            }
-            catch {
-              // 获取iframe sessionStorage失败
+              catch {
+                // 获取iframe sessionStorage失败
+              }
+
+              iframeResults.push({
+                index: i,
+                src,
+                hashContent: hashContent || undefined,
+                sessionStorageData: sessionStorageData || undefined,
+              })
             }
 
             return {
-              count: 1,
-              src,
-              hashContent: hashContent || undefined,
-              sessionStorageData: sessionStorageData || undefined,
+              count,
+              iframes: iframeResults,
             }
           }
           catch {
-            return { count: 0 }
+            return { count: 0, iframes: [] }
           }
         },
       })
 
-      return (result.result as IframeInfo) || { count: 0 }
+      return (result.result as IframeDetectionResult) || { count: 0, iframes: [] }
     }
     catch (error) {
       throw new Error(error instanceof Error ? error.message : '未知错误')
@@ -143,46 +161,69 @@ export function useIframeDetector() {
   async function handleIframeDetection(): Promise<void> {
     try {
       message.value = ''
+      iframeList.value = []
+      selectedIframe.value = null
 
-      const iframeInfo = await getIframeInfo()
+      const iframeResult = await getIframeInfo()
 
-      if (iframeInfo.count === 0) {
+      if (iframeResult.count === 0) {
         message.value = '当前页面没有找到iframe'
         sessionStorageData.value = null
         return
       }
 
-      if (iframeInfo.count > 1) {
-        message.value = `找到 ${iframeInfo.count} 个iframe，请处理只有一个iframe的页面`
-        sessionStorageData.value = null
-        return
-      }
+      iframeList.value = iframeResult.iframes
 
-      if (iframeInfo.src) {
-        sessionStorageData.value = iframeInfo.sessionStorageData || null
+      if (iframeResult.count === 1) {
+        // 单个iframe直接处理
+        const iframe = iframeResult.iframes[0]
+        selectedIframe.value = iframe
+        sessionStorageData.value = iframe.sessionStorageData || null
 
-        if (iframeInfo.hashContent) {
-          await copyToClipboard(iframeInfo.hashContent)
+        if (iframe.hashContent) {
+          await copyToClipboard(iframe.hashContent)
+          message.value = '成功获取iframe数据并复制内容到剪切板'
         }
         else {
           message.value = 'iframe链接不是hash路由'
         }
 
-        if (iframeInfo.sessionStorageData) {
-          message.value = '成功获取iframe数据并复制内容到剪切板'
-        }
-        else {
+        if (!iframe.sessionStorageData) {
           message.value += ' (未找到SET_LOGIN_DATA数据)'
         }
       }
       else {
-        message.value = '无法获取iframe的src属性'
-        sessionStorageData.value = null
+        // 多个iframe，显示列表等待用户选择
+        message.value = `找到 ${iframeResult.count} 个iframe，请选择其中一个`
       }
     }
     catch (error) {
       message.value = error instanceof Error ? error.message : '操作失败'
       sessionStorageData.value = null
+      iframeList.value = []
+      selectedIframe.value = null
+    }
+  }
+
+  async function selectIframe(iframe: IframeInfo): Promise<void> {
+    try {
+      selectedIframe.value = iframe
+      sessionStorageData.value = iframe.sessionStorageData || null
+
+      if (iframe.hashContent) {
+        await copyToClipboard(iframe.hashContent)
+        message.value = '成功获取iframe数据并复制内容到剪切板'
+      }
+      else {
+        message.value = 'iframe链接不是hash路由'
+      }
+
+      if (!iframe.sessionStorageData) {
+        message.value += ' (未找到SET_LOGIN_DATA数据)'
+      }
+    }
+    catch (error) {
+      message.value = error instanceof Error ? error.message : '操作失败'
     }
   }
 
@@ -191,7 +232,10 @@ export function useIframeDetector() {
     message,
     copiedContent,
     sessionStorageData,
+    iframeList,
+    selectedIframe,
     handleIframeDetection,
+    selectIframe,
     copyToClipboard,
   }
 }
