@@ -68,7 +68,7 @@ async function searchAndClickLi() {
       func: (searchText: string) => {
         const liElements = Array.from(document.querySelectorAll('li'))
         const matchedElements = liElements.filter(li =>
-          li.textContent === searchText,
+          li.textContent.trim() === searchText,
         )
 
         matchedElements.forEach((li, index) => {
@@ -79,12 +79,11 @@ async function searchAndClickLi() {
 
         return {
           matchedCount: matchedElements.length,
-          matchedTexts: matchedElements.map(li => li.textContent),
         }
       },
-      args: [searchInput.value],
+      args: [searchInput.value.trim()],
     })
-      .then((results: Array<{ result: { matchedCount: number, matchedTexts: string[] } }>) => {
+      .then((results: Array<{ result: { matchedCount: number } }>) => {
         const result = results[0]?.result
         if (result && result.matchedCount > 0) {
           message.value = `找到匹配的导航并已点击`
