@@ -90,8 +90,8 @@ importers:
         specifier: ^0.62.2
         version: 0.62.2(postcss@8.4.41)(vite@5.4.2(@types/node@22.5.0))
       unplugin-agent-sync:
-        specifier: ^0.1.0
-        version: 0.1.0(esbuild@0.23.1)(vite@5.4.2(@types/node@22.5.0))
+        specifier: ^0.1.1
+        version: 0.1.1(esbuild@0.23.1)(vite@5.4.2(@types/node@22.5.0))
       unplugin-auto-import:
         specifier: ^0.18.2
         version: 0.18.2(@vueuse/core@11.0.1(vue@3.4.38(typescript@5.5.4)))
@@ -4200,8 +4200,8 @@ packages:
       vite:
         optional: true
 
-  unplugin-agent-sync@0.1.0:
-    resolution: {integrity: sha512-ehXbsMc0PAmOgV5Cgi4q3QPJErwtmupf3kgsEYI4pgGmtd7O90p5k7NgYkvmPMzl6dpt/n0M/ywu05cyDl/gTQ==}
+  unplugin-agent-sync@0.1.1:
+    resolution: {integrity: sha512-Dlhm+VPk7f+d+ZoGPeHE0LHTbXGnVVDeDWEMc2ZfRw8kkpjqtCQGT9vonyS2EkBCyIU+sY1BhKC2bsCINHH0lw==}
     peerDependencies:
       '@farmfe/core': '>=1'
       '@nuxt/kit': ^3
@@ -9077,7 +9077,7 @@ snapshots:
       - rollup
       - supports-color
 
-  unplugin-agent-sync@0.1.0(esbuild@0.23.1)(vite@5.4.2(@types/node@22.5.0)):
+  unplugin-agent-sync@0.1.1(esbuild@0.23.1)(vite@5.4.2(@types/node@22.5.0)):
     dependencies:
       unplugin: 2.3.10
     optionalDependencies:

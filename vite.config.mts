@@ -8,7 +8,7 @@ import Icons from 'unplugin-icons/vite'
 import IconsResolver from 'unplugin-icons/resolver'
 import Components from 'unplugin-vue-components/vite'
 import AutoImport from 'unplugin-auto-import/vite'
-import UnpluginAgentSync from 'unplugin-agent-sync/vite'
+import AgentSync from 'unplugin-agent-sync/vite'
 import UnoCSS from 'unocss/vite'
 import { isDev, port, r } from './scripts/utils'
 import packageJson from './package.json'
@@ -58,7 +58,7 @@ export const sharedConfig: UserConfig = {
     // https://github.com/unocss/unocss
     UnoCSS(),
 
-    UnpluginAgentSync(),
+    AgentSync(),
 
     // rewrite assets to use relative path
     {

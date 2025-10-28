@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useIframeDetector } from '~/composables/useIframeDetector'
 
 // Chrome API类型声明
@@ -13,6 +14,120 @@ declare const chrome: {
 }
 
 const { isProcessing, message, copiedContent, sessionStorageData, iframeList, selectedIframe, handleIframeDetection, selectIframe } = useIframeDetector()
+
+// 新功能：搜索和点击li元素
+const searchInput = ref('')
+const searchHistory = ref<string[]>([])
+const currentHistoryIndex = ref(-1)
+
+// 加载搜索历史缓存
+function loadSearchHistory() {
+  const history = localStorage.getItem('li-search-history')
+  if (history) {
+    searchHistory.value = JSON.parse(history)
+    // 显示最后一条历史记录
+    if (searchHistory.value.length > 0) {
+      searchInput.value = searchHistory.value[0]
+    }
+  }
+}
+
+// 处理输入框获得焦点时全选内容
+function _handleInputFocus(event: FocusEvent) {
+  const target = event.target as HTMLInputElement
+  target.select()
+}
+
+// 保存搜索历史到缓存
+function saveSearchHistory() {
+  if (searchInput.value && !searchHistory.value.includes(searchInput.value)) {
+    searchHistory.value.unshift(searchInput.value)
+    // 只保留最新的30条记录
+    searchHistory.value = searchHistory.value.slice(0, 30)
+    localStorage.setItem('li-search-history', JSON.stringify(searchHistory.value))
+  }
+}
+
+// 搜索并点击匹配的li元素
+async function searchAndClickLi() {
+  if (!searchInput.value.trim()) {
+    message.value = '请输入要搜索的内容'
+    return
+  }
+
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (!tab.id) {
+      message.value = '无法获取当前标签页信息'
+      return
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (searchText: string) => {
+        const liElements = Array.from(document.querySelectorAll('li'))
+        const matchedElements = liElements.filter(li =>
+          li.textContent === searchText,
+        )
+
+        matchedElements.forEach((li, index) => {
+          setTimeout(() => {
+            li.click()
+          }, index * 100)
+        })
+
+        return {
+          matchedCount: matchedElements.length,
+          matchedTexts: matchedElements.map(li => li.textContent),
+        }
+      },
+      args: [searchInput.value],
+    })
+      .then((results) => {
+        const result = results[0]?.result
+        if (result && result.matchedCount > 0) {
+          message.value = `找到匹配的导航并已点击`
+          saveSearchHistory()
+          currentHistoryIndex.value = -1
+        }
+        else {
+          message.value = `未找到包含 "${searchInput.value}" 的导航`
+        }
+      })
+  }
+  catch {
+    message.value = '搜索失败，请重试'
+  }
+}
+
+// 处理键盘事件（上下键导航历史记录）
+function _handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (searchHistory.value.length > 0 && currentHistoryIndex.value < searchHistory.value.length - 1) {
+      currentHistoryIndex.value++
+      searchInput.value = searchHistory.value[currentHistoryIndex.value]
+    }
+  }
+  else if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    if (currentHistoryIndex.value > 0) {
+      currentHistoryIndex.value--
+      searchInput.value = searchHistory.value[currentHistoryIndex.value]
+    }
+    else if (currentHistoryIndex.value === 0) {
+      currentHistoryIndex.value = -1
+      searchInput.value = ''
+    }
+  }
+  else if (event.key === 'Enter' && event.target === event.currentTarget) {
+    event.preventDefault()
+    searchAndClickLi()
+  }
+}
+
+// 初始化加载历史记录
+loadSearchHistory()
 
 async function blockAds() {
   try {
@@ -81,6 +196,31 @@ async function navigateToLocalhost() {
   <main class="w-[350px] px-4 py-5 text-center text-gray-700">
     <!-- <Logo /> -->
     <div class="space-y-3">
+      <!-- 搜索和点击li元素功能 -->
+      <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+        <div class="flex gap-2">
+          <input
+            v-model="searchInput"
+            type="text"
+            placeholder="输入要搜索的li文字内容"
+            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            @keydown="_handleKeydown"
+            @focus="_handleInputFocus"
+          >
+          <button
+            class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
+            @click="searchAndClickLi"
+          >
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+        </div>
+        <div class="mt-2 text-xs text-gray-500">
+          使用上下键查看历史搜索记录
+        </div>
+      </div>
+
       <button
         class="btn w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="isProcessing"
