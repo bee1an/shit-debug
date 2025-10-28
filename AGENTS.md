@@ -22,3 +22,7 @@
   - 支持单个/多个iframe处理
   - 提取iframe的hash内容和SET_LOGIN_DATA
   - 一键复制到剪切板
+
+## typescript规范
+
+不要使用any

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { Tabs } from 'webextension-polyfill'
 import { useIframeDetector } from '~/composables/useIframeDetector'
 
 // Chrome API类型声明
@@ -83,7 +84,7 @@ async function searchAndClickLi() {
       },
       args: [searchInput.value],
     })
-      .then((results) => {
+      .then((results: Array<{ result: { matchedCount: number, matchedTexts: string[] } }>) => {
         const result = results[0]?.result
         if (result && result.matchedCount > 0) {
           message.value = `找到匹配的导航并已点击`
@@ -190,25 +191,90 @@ async function navigateToLocalhost() {
 
   await browser.tabs.update(tab.id, { active: true })
 }
+
+async function openAllIframes() {
+  if (!iframeList.value.length) {
+    message.value = '没有可打开的iframe'
+    return
+  }
+
+  message.value = `正在打开 ${iframeList.value.length} 个iframe...`
+
+  try {
+    const tabs: Tabs.Tab[] = []
+
+    for (const iframe of iframeList.value) {
+      if (iframe.hashContent) {
+        const url = `http://localhost:4000${iframe.hashContent}`
+        const tab = await browser.tabs.create({ url, active: false })
+
+        if (tab.id) {
+          tabs.push(tab)
+
+          // 等待页面加载完成
+          await new Promise((resolve) => {
+            const listener = (updatedTabId: number, changeInfo: any) => {
+              if (updatedTabId === tab.id && changeInfo.status === 'complete') {
+                browser.tabs.onUpdated.removeListener(listener)
+                resolve(void 0)
+              }
+            }
+            browser.tabs.onUpdated.addListener(listener)
+          })
+
+          // 如果有sessionStorage数据，注入到页面
+          if (iframe.sessionStorageData) {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (data: any) => {
+                  sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
+                },
+                args: [iframe.sessionStorageData],
+              })
+            }
+            catch {
+              // 注入失败，继续处理下一个
+            }
+          }
+        }
+      }
+    }
+
+    // 打开最后一个标签页
+    if (tabs.length > 0) {
+      await browser.tabs.update(tabs[tabs.length - 1].id!, { active: true })
+      message.value = `已成功打开 ${tabs.length} 个iframe`
+    }
+    else {
+      message.value = '没有找到包含hash内容的iframe'
+    }
+  }
+  catch {
+    message.value = '打开iframe时发生错误'
+  }
+}
 </script>
 
 <template>
-  <main class="w-[350px] px-4 py-5 text-center text-gray-700">
+  <main class="w-[380px] px-6 py-6 text-center" style="background-color: rgb(250, 249, 245); color: rgb(20, 20, 19); font-family: 'Anthropic Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
     <!-- <Logo /> -->
-    <div class="space-y-3">
-      <!-- 搜索和点击li元素功能 -->
-      <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+    <div class="space-y-5">
+      <!-- 搜索功能区域 -->
+      <div class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
         <div class="flex gap-2">
           <input
             v-model="searchInput"
             type="text"
-            placeholder="输入要搜索的li文字内容"
-            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="输入要搜索的导航内容"
+            class="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-200"
+            style="background-color: rgb(250, 249, 245); color: rgb(20, 20, 19); border-radius: 7.5px;"
             @keydown="_handleKeydown"
             @focus="_handleInputFocus"
           >
           <button
-            class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
+            class="px-4 py-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all duration-200 flex items-center justify-center"
+            style="color: rgb(20, 20, 19); border-radius: 7.5px;"
             @click="searchAndClickLi"
           >
             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -216,119 +282,222 @@ async function navigateToLocalhost() {
             </svg>
           </button>
         </div>
-        <div class="mt-2 text-xs text-gray-500">
-          使用上下键查看历史搜索记录
+        <div class="mt-2 text-xs" style="color: rgb(94, 93, 89);">
+          使用上下键浏览历史记录
         </div>
       </div>
 
-      <button
-        class="btn w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        :disabled="isProcessing"
-        @click="handleIframeDetection"
-      >
-        <span v-if="isProcessing" class="flex items-center justify-center">
-          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          检测中...
-        </span>
-        <span v-else>检测页面 iframe</span>
-      </button>
+      <!-- 主要操作区域 -->
+      <div class="space-y-3">
+        <!-- 主要按钮：iframe检测 -->
+        <button
+          class="w-full py-4 px-4 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+          style="background: linear-gradient(135deg, rgb(54, 54, 53) 0%, rgb(84, 84, 83) 100%); border-radius: 10px;"
+          :disabled="isProcessing"
+          @click="handleIframeDetection"
+        >
+          <span v-if="isProcessing" class="flex items-center justify-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span class="font-medium">正在检测页面...</span>
+          </span>
+          <span v-else class="flex items-center justify-center">
+            <svg class="w-5 h-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span class="font-medium">检测页面 iframe</span>
+          </span>
+        </button>
 
-      <button
-        class="btn w-full py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200"
-        @click="blockAds"
-      >
-        <span class="flex items-center justify-center">
-          <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
-          屏蔽 uview-plus 弹窗广告
-        </span>
-      </button>
+        <!-- 次要操作按钮 -->
+        <button
+          class="w-full py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+          style="color: rgb(20, 20, 19); border-radius: 7.5px;"
+          @click="blockAds"
+        >
+          <span class="flex items-center justify-center">
+            <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            <span class="font-medium">屏蔽广告弹窗</span>
+          </span>
+        </button>
+      </div>
 
       <div
         v-if="message"
-        class="p-3 rounded-lg text-sm break-words"
-        :class="{
-          'bg-green-50 text-green-700 border border-green-200': message.includes('已复制') || message.includes('成功'),
-          'bg-blue-50 text-blue-700 border border-blue-200': message.includes('正在检测'),
-          'bg-yellow-50 text-yellow-700 border border-yellow-200': message.includes('找到') && !message.includes('复制'),
-          'bg-red-50 text-red-700 border border-red-200': message.includes('没有找到') || message.includes('错误') || message.includes('失败'),
+        class="p-4 rounded-2xl text-sm break-words shadow-lg border-2 relative overflow-hidden"
+        :style="{
+          backgroundColor: message.includes('已复制') || message.includes('成功') ? 'rgb(240, 253, 244)'
+            : message.includes('正在检测') ? 'rgb(239, 246, 255)'
+              : message.includes('找到') && !message.includes('复制') ? 'rgb(254, 252, 232)'
+                : 'rgb(254, 242, 242)',
+          borderColor: message.includes('已复制') || message.includes('成功') ? 'rgb(34, 197, 94)'
+            : message.includes('正在检测') ? 'rgb(59, 130, 246)'
+              : message.includes('找到') && !message.includes('复制') ? 'rgb(250, 204, 21)'
+                : 'rgb(239, 68, 68)',
         }"
       >
-        {{ message }}
+        <!-- 状态指示条 -->
+        <div
+          class="absolute top-0 left-0 right-0 h-1"
+          :style="{
+            backgroundColor: message.includes('已复制') || message.includes('成功') ? 'rgb(34, 197, 94)'
+              : message.includes('正在检测') ? 'rgb(59, 130, 246)'
+                : message.includes('找到') && !message.includes('复制') ? 'rgb(250, 204, 21)'
+                  : 'rgb(239, 68, 68)',
+          }"
+        />
+
+        <div class="flex items-start">
+          <!-- 动态图标 -->
+          <div class="mr-3 mt-0.5 flex-shrink-0">
+            <svg
+              v-if="message.includes('已复制') || message.includes('成功')"
+              class="w-5 h-5 text-green-600"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <svg
+              v-else-if="message.includes('正在检测')"
+              class="w-5 h-5 text-blue-600 animate-pulse"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <svg
+              v-else-if="message.includes('找到') && !message.includes('复制')"
+              class="w-5 h-5 text-yellow-600"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <svg
+              v-else
+              class="w-5 h-5 text-red-600"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+
+          <!-- 消息内容 -->
+          <div class="flex-1">
+            <div
+              class="font-medium"
+              :style="{
+                color: message.includes('已复制') || message.includes('成功') ? 'rgb(22, 101, 52)'
+                  : message.includes('正在检测') ? 'rgb(37, 99, 235)'
+                    : message.includes('找到') && !message.includes('复制') ? 'rgb(161, 98, 7)'
+                      : 'rgb(185, 28, 28)',
+              }"
+            >
+              {{ message }}
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- iframe 列表 -->
       <div
-        v-if="iframeList.length > 1"
-        class="p-3 bg-gray-50 border border-gray-200 rounded-lg"
+        v-if="iframeList.length"
+        class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm"
+        style="border-radius: 7.5px;"
       >
-        <div class="text-sm font-medium mb-2 text-gray-700">
-          选择 iframe ({{ iframeList.length }} 个)
-        </div>
-        <div class="space-y-1 max-h-40 overflow-y-auto">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-medium" style="color: rgb(20, 20, 19); font-weight: 500;">
+            选择 iframe ({{ iframeList.length }} 个)
+          </div>
           <button
+            class="text-xs px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md flex items-center"
+            style="color: rgb(20, 20, 19);"
+            title="在新标签页中打开所有检测到的iframe"
+            @click="openAllIframes"
+          >
+            <svg class="w-3 h-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+            </svg>
+            打开全部
+          </button>
+        </div>
+        <div class="space-y-2 max-h-48 overflow-y-auto">
+          <div
             v-for="iframe in iframeList"
             :key="iframe.index"
-            class="w-full px-2 py-1 text-left text-xs border rounded transition-colors duration-200 truncate"
+            class="group relative px-3 py-2 text-left text-sm border rounded-lg transition-all duration-200 cursor-pointer"
             :class="{
-              'bg-blue-50 border-blue-300 text-blue-700': selectedIframe?.index === iframe.index,
-              'bg-white border-gray-200 hover:bg-gray-50': selectedIframe?.index !== iframe.index,
+              'border-blue-200': selectedIframe?.index === iframe.index,
+              'border-gray-200 hover:border-gray-300': selectedIframe?.index !== iframe.index,
             }"
-            :title="iframe.hashContent || '无hash内容'"
+            :style="{
+              backgroundColor: selectedIframe?.index === iframe.index ? 'rgb(250, 249, 245)' : 'white',
+              color: 'rgb(20, 20, 19)',
+            }"
             @click="selectIframe(iframe)"
           >
-            <span class="font-medium">iframe {{ iframe.index + 1 }}</span>
-            <span
+            <div class="flex items-center justify-between">
+              <span class="font-medium">iframe {{ iframe.index + 1 }}</span>
+              <div class="flex items-center gap-1">
+                <span
+                  v-if="iframe.hashContent"
+                  class="w-2 h-2 rounded-full"
+                  style="background-color: rgb(34, 197, 94);"
+                  title="包含hash内容"
+                />
+                <span
+                  v-if="iframe.sessionStorageData"
+                  class="w-2 h-2 rounded-full"
+                  style="background-color: rgb(59, 130, 246);"
+                  title="包含sessionStorage数据"
+                />
+              </div>
+            </div>
+            <div
               v-if="iframe.hashContent"
-              class="ml-1 text-green-600"
-            >
-              ✓
-            </span>
-            <span
-              v-if="iframe.sessionStorageData"
-              class="ml-1 text-blue-600"
-            >
-              ✓
-            </span>
-            <span
-              v-if="iframe.hashContent"
-              class="ml-1 text-gray-600 truncate"
+              class="mt-1 text-xs truncate"
+              style="color: rgb(94, 93, 89);"
               :title="iframe.hashContent"
             >
               {{ iframe.hashContent }}
-            </span>
-            <span
+            </div>
+            <div
               v-else
-              class="ml-1 text-gray-400"
+              class="mt-1 text-xs"
+              style="color: rgb(154, 153, 150);"
             >
-              无hash
-            </span>
-          </button>
-        </div>
-      </div>
+              无hash内容
+            </div>
 
-      <div
-        v-if="copiedContent"
-        class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
-      >
-        <div class="text-xs text-gray-500 mb-1 flex-shrink-0">
-          {{ copiedContent.split('?')[0] }}
+            <!-- Hover时显示的跳转按钮 -->
+            <button
+              v-if="iframe.hashContent"
+              class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50"
+              style="color: rgb(20, 20, 19);"
+              :title="iframe.sessionStorageData ? '跳转并传递登录数据' : '跳转到 localhost:4000'"
+              @click.stop="() => { copiedContent = iframe.hashContent || ''; navigateToLocalhost(); }"
+            >
+              <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+          </div>
         </div>
-
-        <button
-          class="btn mt-3 w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors duration-200 flex items-center justify-center"
-          :disabled="!copiedContent"
-          @click="navigateToLocalhost"
-        >
-          <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
-          {{ sessionStorageData ? '跳转并传递登录数据' : '跳转到 localhost:4000' }}
-        </button>
       </div>
     </div>
   </main>
