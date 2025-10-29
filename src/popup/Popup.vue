@@ -21,6 +21,28 @@ const searchInput = ref('')
 const searchHistory = ref<string[]>([])
 const currentHistoryIndex = ref(-1)
 
+// 历史记录列表相关状态
+const showHistoryList = ref(true) // 默认显示历史记录列表
+const isHistoryListExpanded = ref(false) // 历史记录列表是否展开
+const historyListMaxItems = 10 // 最多显示10条历史记录
+
+// 历史记录项接口
+interface SearchHistoryItem {
+  text: string
+}
+
+// 获取格式化的历史记录列表
+function getFormattedHistoryList(): SearchHistoryItem[] {
+  const history = localStorage.getItem('li-search-history')
+  if (!history)
+    return []
+
+  const historyArray = JSON.parse(history) as string[]
+  return historyArray.slice(0, historyListMaxItems).map(text => ({
+    text,
+  }))
+}
+
 // 加载搜索历史缓存
 function loadSearchHistory() {
   const history = localStorage.getItem('li-search-history')
@@ -37,6 +59,45 @@ function loadSearchHistory() {
 function _handleInputFocus(event: FocusEvent) {
   const target = event.target as HTMLInputElement
   target.select()
+}
+
+// 切换历史记录列表展开/收起状态
+function toggleHistoryList() {
+  isHistoryListExpanded.value = !isHistoryListExpanded.value
+}
+
+// 点击历史记录项
+function selectHistoryItem(item: SearchHistoryItem) {
+  searchInput.value = item.text
+  isHistoryListExpanded.value = false
+  searchAndClickLi()
+}
+
+// 删除单个历史记录项
+function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
+  event.stopPropagation() // 阻止事件冒泡
+
+  const index = searchHistory.value.indexOf(item.text)
+  if (index > -1) {
+    searchHistory.value.splice(index, 1)
+    localStorage.setItem('li-search-history', JSON.stringify(searchHistory.value))
+    // 如果删除的是当前显示在输入框的值，清空输入框
+    if (searchInput.value === item.text) {
+      searchInput.value = searchHistory.value.length > 0 ? searchHistory.value[0] : ''
+    }
+  }
+}
+
+// 清空所有历史记录
+function clearAllHistory() {
+  searchHistory.value = []
+  localStorage.removeItem('li-search-history')
+  isHistoryListExpanded.value = false
+}
+
+// 点击页面其他地方时收起历史记录列表
+function handleClickOutside() {
+  isHistoryListExpanded.value = false
 }
 
 // 保存搜索历史到缓存
@@ -122,7 +183,11 @@ function _handleKeydown(event: KeyboardEvent) {
   }
   else if (event.key === 'Enter' && event.target === event.currentTarget) {
     event.preventDefault()
+    isHistoryListExpanded.value = false
     searchAndClickLi()
+  }
+  else if (event.key === 'Escape') {
+    isHistoryListExpanded.value = false
   }
 }
 
@@ -256,12 +321,12 @@ async function openAllIframes() {
 </script>
 
 <template>
-  <main class="w-[380px] px-6 py-6 text-center" style="background-color: rgb(250, 249, 245); color: rgb(20, 20, 19); font-family: 'Anthropic Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <main class="w-[380px] px-6 py-6 text-center" style="background-color: rgb(250, 249, 245); color: rgb(20, 20, 19); font-family: 'Anthropic Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;" @click="handleClickOutside">
     <!-- <Logo /> -->
     <div class="space-y-5">
       <!-- 搜索功能区域 -->
-      <div class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div class="flex gap-2">
+      <div class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm relative">
+        <div class="flex gap-2 ">
           <input
             v-model="searchInput"
             type="text"
@@ -281,8 +346,78 @@ async function openAllIframes() {
             </svg>
           </button>
         </div>
+
         <div class="mt-2 text-xs" style="color: rgb(94, 93, 89);">
           使用上下键浏览历史记录
+        </div>
+
+        <!-- 历史记录列表 -->
+        <div
+          v-if="showHistoryList && getFormattedHistoryList().length > 0"
+          class="mt-2 bg-white border border-gray-200 rounded-lg shadow-sm"
+          style="border-radius: 7.5px;"
+          @click.stop
+        >
+          <!-- 历史记录列表头部 -->
+          <div
+            class="p-2 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+            @click="toggleHistoryList"
+          >
+            <span class="text-xs font-medium" style="color: rgb(94, 93, 89);">
+              搜索历史 ({{ isHistoryListExpanded ? getFormattedHistoryList().length : '1' }}/{{ getFormattedHistoryList().length }})
+            </span>
+            <div class="flex items-center gap-2">
+              <button
+                class="text-xs px-2 py-1 text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                @click.stop="clearAllHistory"
+              >
+                清空全部
+              </button>
+              <svg
+                class="w-4 h-4 transition-transform duration-200"
+                :class="{ 'rotate-180': isHistoryListExpanded }"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                style="color: rgb(94, 93, 89);"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- 历史记录列表内容 -->
+          <div
+            class="overflow-hidden transition-all duration-300 scrollbar-hide"
+            :class="{ 'overflow-y-auto': isHistoryListExpanded }"
+            :style="{
+              maxHeight: isHistoryListExpanded ? '240px' : '60px',
+            }"
+          >
+            <div class="py-1">
+              <div
+                v-for="(item, index) in (isHistoryListExpanded ? getFormattedHistoryList() : getFormattedHistoryList().slice(0, 1))"
+                :key="index"
+                class="group px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between transition-colors duration-200"
+                @click="selectHistoryItem(item)"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm truncate" style="color: rgb(20, 20, 19);">
+                    {{ item.text }}
+                  </div>
+                </div>
+                <button
+                  class="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded transition-all duration-200"
+                  @click="deleteHistoryItem(item, $event)"
+                >
+                  <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -501,3 +636,13 @@ async function openAllIframes() {
     </div>
   </main>
 </template>
+
+<style scoped>
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+</style>
