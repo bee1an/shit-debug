@@ -28,3 +28,4 @@
 ## typescript规范
 
 不要使用any
+使用 browser 代替 chrome 这个变量

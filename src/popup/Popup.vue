@@ -3,17 +3,6 @@ import { ref } from 'vue'
 import type { Tabs } from 'webextension-polyfill'
 import { useIframeDetector } from '~/composables/useIframeDetector'
 
-// Chrome API类型声明
-declare const chrome: {
-  scripting: {
-    executeScript: (params: {
-      target: { tabId: number }
-      func: (...args: any[]) => any
-      args?: any[]
-    }) => Promise<Array<{ result: any }>>
-  }
-}
-
 const { isProcessing, message, copiedContent, sessionStorageData, iframeList, selectedIframe, handleIframeDetection, selectIframe } = useIframeDetector()
 
 // 新功能：搜索和点击li元素
@@ -33,25 +22,26 @@ interface SearchHistoryItem {
 
 // 获取格式化的历史记录列表
 function getFormattedHistoryList(): SearchHistoryItem[] {
-  const history = localStorage.getItem('li-search-history')
-  if (!history)
-    return []
-
-  const historyArray = JSON.parse(history) as string[]
-  return historyArray.slice(0, historyListMaxItems).map(text => ({
+  return searchHistory.value.slice(0, historyListMaxItems).map(text => ({
     text,
   }))
 }
 
 // 加载搜索历史缓存
-function loadSearchHistory() {
-  const history = localStorage.getItem('li-search-history')
-  if (history) {
-    searchHistory.value = JSON.parse(history)
+async function loadSearchHistory() {
+  try {
+    const result = await browser.storage.local.get(['li-search-history'])
+    const history = result['li-search-history'] || []
+    searchHistory.value = history as string[]
+
     // 显示最后一条历史记录
     if (searchHistory.value.length > 0) {
       searchInput.value = searchHistory.value[0]
     }
+  }
+  catch (error) {
+    console.error('加载搜索历史失败:', error)
+    searchHistory.value = []
   }
 }
 
@@ -74,13 +64,15 @@ function selectHistoryItem(item: SearchHistoryItem) {
 }
 
 // 删除单个历史记录项
-function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
+async function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
   event.stopPropagation() // 阻止事件冒泡
 
   const index = searchHistory.value.indexOf(item.text)
   if (index > -1) {
     searchHistory.value.splice(index, 1)
-    localStorage.setItem('li-search-history', JSON.stringify(searchHistory.value))
+    await browser.storage.local.set({
+      'li-search-history': searchHistory.value,
+    })
     // 如果删除的是当前显示在输入框的值，清空输入框
     if (searchInput.value === item.text) {
       searchInput.value = searchHistory.value.length > 0 ? searchHistory.value[0] : ''
@@ -89,9 +81,9 @@ function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
 }
 
 // 清空所有历史记录
-function clearAllHistory() {
+async function clearAllHistory() {
   searchHistory.value = []
-  localStorage.removeItem('li-search-history')
+  await browser.storage.local.remove(['li-search-history'])
   isHistoryListExpanded.value = false
 }
 
@@ -101,12 +93,14 @@ function handleClickOutside() {
 }
 
 // 保存搜索历史到缓存
-function saveSearchHistory() {
+async function saveSearchHistory() {
   if (searchInput.value && !searchHistory.value.includes(searchInput.value)) {
     searchHistory.value.unshift(searchInput.value)
     // 只保留最新的30条记录
     searchHistory.value = searchHistory.value.slice(0, 30)
-    localStorage.setItem('li-search-history', JSON.stringify(searchHistory.value))
+    await browser.storage.local.set({
+      'li-search-history': searchHistory.value,
+    })
   }
 }
 
@@ -124,7 +118,7 @@ async function searchAndClickLi() {
       return
     }
 
-    await chrome.scripting.executeScript({
+    await browser.scripting.executeScript({
       target: { tabId: tab.id },
       func: (searchText: string) => {
         const liElements = Array.from(document.querySelectorAll('li'))
@@ -144,8 +138,8 @@ async function searchAndClickLi() {
       },
       args: [searchInput.value.trim()],
     })
-      .then((results: Array<{ result: { matchedCount: number } }>) => {
-        const result = results[0]?.result
+      .then((results: unknown) => {
+        const result = (results as Array<{ result: { matchedCount: number } }>)[0]?.result
         if (result && result.matchedCount > 0) {
           message.value = `找到匹配的导航并已点击`
           saveSearchHistory()
@@ -204,7 +198,7 @@ async function blockAds() {
       return
     }
 
-    await chrome.scripting.executeScript({
+    await browser.scripting.executeScript({
       target: { tabId: tab.id },
       func: (expireTime: string) => {
         localStorage.setItem('adExpire2', expireTime)
@@ -240,7 +234,7 @@ async function navigateToLocalhost() {
 
   if (sessionStorageData.value) {
     try {
-      await chrome.scripting.executeScript({
+      await browser.scripting.executeScript({
         target: { tabId: tab.id },
         func: (data: any) => {
           sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
@@ -289,7 +283,7 @@ async function openAllIframes() {
           // 如果有sessionStorage数据，注入到页面
           if (iframe.sessionStorageData) {
             try {
-              await chrome.scripting.executeScript({
+              await browser.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: (data: any) => {
                   sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
