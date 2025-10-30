@@ -123,7 +123,7 @@ async function searchAndClickLi() {
       func: (searchText: string) => {
         const liElements = Array.from(document.querySelectorAll('li'))
         const matchedElements = liElements.filter(li =>
-          li.textContent.trim() === searchText,
+          li.textContent.trim().includes(searchText),
         )
 
         matchedElements.forEach((li, index) => {
