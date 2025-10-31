@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Tabs } from 'webextension-polyfill'
 import { useIframeDetector } from '~/composables/useIframeDetector'
-import { getArrayFromStorage, saveArrayToStorage } from '~/utils/storage'
+import { useReactiveStorage } from '~/composables/useReactiveStorage'
 
-const { isProcessing, message, copiedContent, sessionStorageData, iframeList, selectedIframe, handleIframeDetection, selectIframe } = useIframeDetector()
+const {
+  isProcessing,
+  message,
+  copiedContent,
+  sessionStorageData,
+  iframeList,
+  selectedIframe,
+  handleIframeDetection,
+  selectIframe,
+} = useIframeDetector()
 
 // 新功能：搜索和点击li元素
 const searchInput = ref('')
-const searchHistory = ref<string[]>([])
+const searchHistory = useReactiveStorage<string>('li-search-history', [])
 const currentHistoryIndex = ref(-1)
 
 // 历史记录列表相关状态
@@ -28,11 +37,8 @@ function getFormattedHistoryList(): SearchHistoryItem[] {
   }))
 }
 
-// 加载搜索历史缓存
-async function loadSearchHistory() {
-  searchHistory.value = await getArrayFromStorage<string>('li-search-history')
-
-  // 显示最后一条历史记录
+// 显示最后一条历史记录
+function showLatestHistory() {
   if (searchHistory.value.length > 0) {
     searchInput.value = searchHistory.value[0]
   }
@@ -63,7 +69,6 @@ async function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
   const index = searchHistory.value.indexOf(item.text)
   if (index > -1) {
     searchHistory.value.splice(index, 1)
-    await saveArrayToStorage('li-search-history', searchHistory.value)
     // 如果删除的是当前显示在输入框的值，清空输入框
     if (searchInput.value === item.text) {
       searchInput.value = searchHistory.value.length > 0 ? searchHistory.value[0] : ''
@@ -72,9 +77,8 @@ async function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
 }
 
 // 清空所有历史记录
-async function clearAllHistory() {
+function clearAllHistory() {
   searchHistory.value = []
-  await browser.storage.local.remove(['li-search-history'])
   isHistoryListExpanded.value = false
 }
 
@@ -84,12 +88,11 @@ function handleClickOutside() {
 }
 
 // 保存搜索历史到缓存
-async function saveSearchHistory() {
+function saveSearchHistory() {
   if (searchInput.value && !searchHistory.value.includes(searchInput.value)) {
     searchHistory.value.unshift(searchInput.value)
     // 只保留最新的30条记录
     searchHistory.value = searchHistory.value.slice(0, 30)
-    await saveArrayToStorage('li-search-history', searchHistory.value)
   }
 }
 
@@ -174,8 +177,16 @@ function _handleKeydown(event: KeyboardEvent) {
   }
 }
 
-// 初始化加载历史记录
-loadSearchHistory()
+// 监听搜索历史变化，自动更新输入框
+watch(searchHistory, (newHistory) => {
+  if (newHistory.length > 0 && !searchInput.value) {
+    // 如果输入框为空且有历史记录，显示最新的历史记录
+    searchInput.value = newHistory[0]
+  }
+}, { immediate: true })
+
+// 初始化显示最新历史记录
+showLatestHistory()
 
 async function blockAds() {
   try {

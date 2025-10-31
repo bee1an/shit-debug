@@ -28,8 +28,8 @@
   // 保存搜索历史到 browser.storage (这样 popup 也能访问)
   async function saveSearchHistory(text: string) {
     // 获取现有的搜索历史
-    const result = await browser.storage.local.get(['li-search-history'])
-    const historyArray: string[] = (result['li-search-history'] as string[] | undefined) || []
+    const { getArrayFromStorage, saveArrayToStorage } = await import('../utils/storage')
+    const historyArray = await getArrayFromStorage<string>('li-search-history')
 
     // 查找文本是否已存在
     const existingIndex = historyArray.indexOf(text)
@@ -47,8 +47,7 @@
     // 只保留最新的30条记录 (与 popup 保持一致)
     const updatedHistory = historyArray.slice(0, 30)
 
-    await browser.storage.local.set({
-      'li-search-history': updatedHistory,
-    })
+    // 使用统一的存储函数
+    await saveArrayToStorage('li-search-history', updatedHistory)
   }
 })()
