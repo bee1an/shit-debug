@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import type { Tabs } from 'webextension-polyfill'
 import { useIframeDetector } from '~/composables/useIframeDetector'
+import { getArrayFromStorage, saveArrayToStorage } from '~/utils/storage'
 
 const { isProcessing, message, copiedContent, sessionStorageData, iframeList, selectedIframe, handleIframeDetection, selectIframe } = useIframeDetector()
 
@@ -29,19 +30,11 @@ function getFormattedHistoryList(): SearchHistoryItem[] {
 
 // 加载搜索历史缓存
 async function loadSearchHistory() {
-  try {
-    const result = await browser.storage.local.get(['li-search-history'])
-    const history = result['li-search-history'] || []
-    searchHistory.value = history as string[]
+  searchHistory.value = await getArrayFromStorage<string>('li-search-history')
 
-    // 显示最后一条历史记录
-    if (searchHistory.value.length > 0) {
-      searchInput.value = searchHistory.value[0]
-    }
-  }
-  catch (error) {
-    console.error('加载搜索历史失败:', error)
-    searchHistory.value = []
+  // 显示最后一条历史记录
+  if (searchHistory.value.length > 0) {
+    searchInput.value = searchHistory.value[0]
   }
 }
 
@@ -70,9 +63,7 @@ async function deleteHistoryItem(item: SearchHistoryItem, event: MouseEvent) {
   const index = searchHistory.value.indexOf(item.text)
   if (index > -1) {
     searchHistory.value.splice(index, 1)
-    await browser.storage.local.set({
-      'li-search-history': searchHistory.value,
-    })
+    await saveArrayToStorage('li-search-history', searchHistory.value)
     // 如果删除的是当前显示在输入框的值，清空输入框
     if (searchInput.value === item.text) {
       searchInput.value = searchHistory.value.length > 0 ? searchHistory.value[0] : ''
@@ -98,9 +89,7 @@ async function saveSearchHistory() {
     searchHistory.value.unshift(searchInput.value)
     // 只保留最新的30条记录
     searchHistory.value = searchHistory.value.slice(0, 30)
-    await browser.storage.local.set({
-      'li-search-history': searchHistory.value,
-    })
+    await saveArrayToStorage('li-search-history', searchHistory.value)
   }
 }
 
