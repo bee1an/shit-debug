@@ -44,3 +44,19 @@ onMessage('get-current-tab', async () => {
 onMessage('get-iframe-session-storage', async () => {
   return { success: false, error: '此功能已移至content script处理' }
 })
+
+browser.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    // 获取请求头
+    browser.storage.local.set({
+      key_req_host: {
+        url: details.url,
+        headers: JSON.stringify(details.requestHeaders),
+      },
+    })
+    // 可以在此对请求头进行修改
+    return details
+  },
+  { urls: ['https://cdszzx.tfsmy.com/cbase/bud-cloud-governance-biz/openKey/key*'] },
+  ['requestHeaders'],
+)

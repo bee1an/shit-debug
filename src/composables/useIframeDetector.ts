@@ -1,3 +1,6 @@
+import { ref } from 'vue'
+import { type OpenKeyParseResult, getAndParseOpenKey, hasValidOpenKeyConfig, replaceOpenKeyInUrl } from '~/utils/openKey'
+
 // Chrome API类型声明
 declare const chrome: {
   scripting: {
@@ -12,7 +15,8 @@ interface IframeInfo {
   index: number
   src?: string
   hashContent?: string
-  sessionStorageData?: any
+  openKeyResult?: OpenKeyParseResult
+  updatedUrl?: string
 }
 
 interface IframeDetectionResult {
@@ -24,9 +28,72 @@ export function useIframeDetector() {
   const isProcessing = ref(false)
   const message = ref('')
   const copiedContent = ref('')
-  const sessionStorageData = ref<any>(null)
   const iframeList = ref<IframeInfo[]>([])
   const selectedIframe = ref<IframeInfo | null>(null)
+
+  /**
+   * 处理单个iframe的openKey获取和URL替换
+   * @param iframe 原始iframe信息
+   * @param iframe.index iframe序号
+   * @param iframe.src iframe的src属性
+   * @param iframe.hashContent iframe的hash内容
+   * @param maxRetries 最大重试次数，默认3次
+   * @returns Promise<IframeInfo> 处理结果
+   */
+  async function processIframeWithOpenKey(iframe: { index: number, src?: string, hashContent?: string }, maxRetries = 3): Promise<IframeInfo> {
+    const processedIframe: IframeInfo = {
+      index: iframe.index,
+      src: iframe.src,
+      hashContent: iframe.hashContent,
+    }
+
+    let openKeyResult: OpenKeyParseResult | null = null
+    let lastError: string | null = null
+
+    // 重试获取openKey
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        openKeyResult = await getAndParseOpenKey()
+        processedIframe.openKeyResult = openKeyResult
+
+        if (openKeyResult.success && openKeyResult.data?.result.openKey && iframe.hashContent) {
+          try {
+            const baseUrl = `http://localhost:4000${iframe.hashContent}`
+            const updatedUrl = replaceOpenKeyInUrl(baseUrl, openKeyResult.data.result.openKey)
+            processedIframe.updatedUrl = updatedUrl
+            break // 成功则跳出循环
+          }
+          catch (error) {
+            lastError = error instanceof Error ? error.message : 'URL替换失败'
+            console.error('URL替换失败:', error)
+          }
+        }
+        else {
+          lastError = openKeyResult?.error || 'OpenKey获取失败'
+        }
+      }
+      catch (error) {
+        lastError = error instanceof Error ? error.message : 'OpenKey获取异常'
+        console.error(`OpenKey获取失败 (尝试 ${attempt}/${maxRetries}):`, error)
+      }
+
+      // 如果不是最后一次尝试，等待一下再重试
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)) // 递增延迟：1s, 2s, 3s
+      }
+    }
+
+    // 如果所有重试都失败了，设置错误信息
+    if (!openKeyResult?.success && lastError) {
+      processedIframe.openKeyResult = {
+        success: false,
+        error: `重试${maxRetries}次后仍然失败: ${lastError}`,
+      }
+    }
+
+    return processedIframe
+  }
+
   async function getIframeInfo(): Promise<IframeDetectionResult> {
     try {
       isProcessing.value = true
@@ -49,7 +116,7 @@ export function useIframeDetector() {
               return { count: 0, iframes: [] }
             }
 
-            const iframeResults: IframeInfo[] = []
+            const iframeResults: { index: number, src?: string, hashContent?: string }[] = []
 
             // 获取所有iframe的信息
             for (let i = 0; i < iframes.length; i++) {
@@ -67,58 +134,10 @@ export function useIframeDetector() {
                 }
               }
 
-              let sessionStorageData
-
-              try {
-                if (iframe.contentWindow) {
-                  sessionStorageData = await new Promise((resolve) => {
-                    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-
-                    const timeout = setTimeout(() => {
-                      // eslint-disable-next-line ts/no-use-before-define
-                      window.removeEventListener('message', handleMessage)
-                      resolve(undefined)
-                    }, 3000)
-
-                    const handleMessage = (event: MessageEvent) => {
-                      if (event.data.type === 'iframe_data_response' && event.data.messageId === messageId) {
-                        clearTimeout(timeout)
-                        window.removeEventListener('message', handleMessage)
-
-                        const response = event.data.data?.sessionStorageData
-                        if (response) {
-                          try {
-                            resolve(JSON.parse(response))
-                          }
-                          catch {
-                            resolve(response)
-                          }
-                        }
-                        else {
-                          resolve(undefined)
-                        }
-                      }
-                    }
-
-                    window.addEventListener('message', handleMessage)
-
-                    iframe.contentWindow?.postMessage({
-                      type: 'request_iframe_data',
-                      messageId,
-                      requiredKeys: ['SET_LOGIN_DATA'],
-                    }, '*')
-                  })
-                }
-              }
-              catch {
-                // 获取iframe sessionStorage失败
-              }
-
               iframeResults.push({
                 index: i,
                 src,
                 hashContent: hashContent || undefined,
-                sessionStorageData: sessionStorageData || undefined,
               })
             }
 
@@ -133,7 +152,19 @@ export function useIframeDetector() {
         },
       })
 
-      return (result.result as IframeDetectionResult) || { count: 0, iframes: [] }
+      const basicResult = result.result as IframeDetectionResult || { count: 0, iframes: [] }
+
+      // 为每个iframe处理openKey
+      const processedIframes: IframeInfo[] = []
+      for (const iframe of basicResult.iframes) {
+        const processedIframe = await processIframeWithOpenKey(iframe)
+        processedIframes.push(processedIframe)
+      }
+
+      return {
+        count: basicResult.count,
+        iframes: processedIframes,
+      }
     }
     catch (error) {
       throw new Error(error instanceof Error ? error.message : '未知错误')
@@ -158,17 +189,24 @@ export function useIframeDetector() {
       throw new Error('复制到剪切板失败')
     }
   }
+
   async function handleIframeDetection(): Promise<void> {
     try {
       message.value = ''
       iframeList.value = []
       selectedIframe.value = null
 
+      // 检查是否有有效的openKey配置
+      const hasConfig = await hasValidOpenKeyConfig()
+      if (!hasConfig) {
+        message.value = '未找到有效的OpenKey配置，请先访问目标页面'
+        return
+      }
+
       const iframeResult = await getIframeInfo()
 
       if (iframeResult.count === 0) {
         message.value = '当前页面没有找到iframe'
-        sessionStorageData.value = null
         return
       }
 
@@ -178,18 +216,22 @@ export function useIframeDetector() {
         // 单个iframe直接处理
         const iframe = iframeResult.iframes[0]
         selectedIframe.value = iframe
-        sessionStorageData.value = iframe.sessionStorageData || null
 
-        if (iframe.hashContent) {
+        if (iframe.updatedUrl) {
+          await copyToClipboard(iframe.updatedUrl)
+          message.value = '成功获取openKey并更新URL，已复制到剪切板'
+        }
+        else if (iframe.hashContent) {
           await copyToClipboard(iframe.hashContent)
-          message.value = '成功获取iframe数据并复制内容到剪切板'
+          message.value = '成功获取iframe内容，但openKey获取失败'
         }
         else {
           message.value = 'iframe链接不是hash路由'
         }
 
-        if (!iframe.sessionStorageData) {
-          message.value += ' (未找到SET_LOGIN_DATA数据)'
+        if (!iframe.openKeyResult?.success) {
+          const errorMsg = iframe.openKeyResult?.error || '未知错误'
+          message.value += ` (openKey获取失败: ${errorMsg})`
         }
       }
       else {
@@ -199,7 +241,6 @@ export function useIframeDetector() {
     }
     catch (error) {
       message.value = error instanceof Error ? error.message : '操作失败'
-      sessionStorageData.value = null
       iframeList.value = []
       selectedIframe.value = null
     }
@@ -208,18 +249,22 @@ export function useIframeDetector() {
   async function selectIframe(iframe: IframeInfo): Promise<void> {
     try {
       selectedIframe.value = iframe
-      sessionStorageData.value = iframe.sessionStorageData || null
 
-      if (iframe.hashContent) {
+      if (iframe.updatedUrl) {
+        await copyToClipboard(iframe.updatedUrl)
+        message.value = '成功获取openKey并更新URL，已复制到剪切板'
+      }
+      else if (iframe.hashContent) {
         await copyToClipboard(iframe.hashContent)
-        message.value = '成功获取iframe数据并复制内容到剪切板'
+        message.value = '成功获取iframe内容，但openKey获取失败'
       }
       else {
         message.value = 'iframe链接不是hash路由'
       }
 
-      if (!iframe.sessionStorageData) {
-        message.value += ' (未找到SET_LOGIN_DATA数据)'
+      if (!iframe.openKeyResult?.success) {
+        const errorMsg = iframe.openKeyResult?.error || '未知错误'
+        message.value += ` (openKey获取失败: ${errorMsg})`
       }
     }
     catch (error) {
@@ -231,7 +276,6 @@ export function useIframeDetector() {
     isProcessing,
     message,
     copiedContent,
-    sessionStorageData,
     iframeList,
     selectedIframe,
     handleIframeDetection,

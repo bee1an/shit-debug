@@ -8,7 +8,6 @@ const {
   isProcessing,
   message,
   copiedContent,
-  sessionStorageData,
   iframeList,
   selectedIframe,
   handleIframeDetection,
@@ -216,7 +215,7 @@ async function navigateToLocalhost() {
   if (!copiedContent.value)
     return
 
-  const url = `http://localhost:4000${copiedContent.value}`
+  const url = copiedContent.value.startsWith('http') ? copiedContent.value : `http://localhost:4000${copiedContent.value}`
   const tab = await browser.tabs.create({ url, active: false })
 
   if (!tab.id)
@@ -231,21 +230,6 @@ async function navigateToLocalhost() {
     }
     browser.tabs.onUpdated.addListener(listener)
   })
-
-  if (sessionStorageData.value) {
-    try {
-      await browser.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (data: any) => {
-          sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
-        },
-        args: [sessionStorageData.value],
-      })
-    }
-    catch {
-      // 注入失败
-    }
-  }
 
   await browser.tabs.update(tab.id, { active: true })
 }
@@ -262,8 +246,10 @@ async function openAllIframes() {
     const tabs: Tabs.Tab[] = []
 
     for (const iframe of iframeList.value) {
-      if (iframe.hashContent) {
-        const url = `http://localhost:4000${iframe.hashContent}`
+      // 优先使用更新后的URL，否则使用hash内容
+      const url = iframe.updatedUrl || (iframe.hashContent ? `http://localhost:4000${iframe.hashContent}` : null)
+
+      if (url) {
         const tab = await browser.tabs.create({ url, active: false })
 
         if (tab.id) {
@@ -279,22 +265,6 @@ async function openAllIframes() {
             }
             browser.tabs.onUpdated.addListener(listener)
           })
-
-          // 如果有sessionStorage数据，注入到页面
-          if (iframe.sessionStorageData) {
-            try {
-              await browser.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: (data: any) => {
-                  sessionStorage.setItem('SET_LOGIN_DATA', typeof data === 'object' ? JSON.stringify(data) : data)
-                },
-                args: [iframe.sessionStorageData],
-              })
-            }
-            catch {
-              // 注入失败，继续处理下一个
-            }
-          }
         }
       }
     }
@@ -305,7 +275,7 @@ async function openAllIframes() {
       message.value = `已成功打开 ${tabs.length} 个iframe`
     }
     else {
-      message.value = '没有找到包含hash内容的iframe'
+      message.value = '没有找到可用的iframe URL'
     }
   }
   catch {
@@ -589,10 +559,16 @@ async function openAllIframes() {
                   title="包含hash内容"
                 />
                 <span
-                  v-if="iframe.sessionStorageData"
+                  v-if="iframe.openKeyResult?.success"
                   class="w-2 h-2 rounded-full"
                   style="background-color: rgb(59, 130, 246);"
-                  title="包含sessionStorage数据"
+                  title="openKey获取成功"
+                />
+                <span
+                  v-if="iframe.openKeyResult && !iframe.openKeyResult.success"
+                  class="w-2 h-2 rounded-full"
+                  style="background-color: rgb(239, 68, 68);"
+                  title="openKey获取失败"
                 />
               </div>
             </div>
@@ -614,11 +590,11 @@ async function openAllIframes() {
 
             <!-- Hover时显示的跳转按钮 -->
             <button
-              v-if="iframe.hashContent"
+              v-if="iframe.updatedUrl || iframe.hashContent"
               class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50"
               style="color: rgb(20, 20, 19);"
-              :title="iframe.sessionStorageData ? '跳转并传递登录数据' : '跳转到 localhost:4000'"
-              @click.stop="() => { copiedContent = iframe.hashContent || ''; navigateToLocalhost(); }"
+              :title="iframe.updatedUrl ? '跳转到更新后的URL' : '跳转到 localhost:4000'"
+              @click.stop="() => { copiedContent = iframe.updatedUrl || iframe.hashContent || ''; navigateToLocalhost(); }"
             >
               <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
