@@ -18,6 +18,8 @@ export async function getManifest() {
         update_url: 'https://raw.githubusercontent.com/bee1an/shit-debug/refs/heads/main/updates.xml',
       },
     },
+    // @ts-expect-error let me do it
+    update_url: 'https://raw.githubusercontent.com/bee1an/shit-debug/refs/heads/main/updates.xml',
     action: {
       default_icon: 'assets/icon-512.png',
       default_popup: 'dist/popup/index.html',
