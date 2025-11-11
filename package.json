@@ -1,7 +1,7 @@
 {
   "name": "shit-debug",
   "displayName": "Shit Debug",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "packageManager": "pnpm@9.7.1",
   "description": "高效debug的临时解决方案",

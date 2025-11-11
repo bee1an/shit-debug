@@ -19,6 +19,31 @@ const iframeComponentRef = ref<InstanceType<typeof IframeComponent>>()
 // 统一消息状态
 const message = ref('')
 
+// 广告屏蔽功能
+async function blockAds() {
+  try {
+    const expireTime = Math.floor((Date.now() + (8 * 60 * 60 * 1000)) / 1000)
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+
+    if (!tab.id) {
+      message.value = '无法获取当前标签页信息'
+      return
+    }
+
+    await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (expireTime: string) => {
+        localStorage.setItem('adExpire2', expireTime)
+      },
+      args: [expireTime.toString()],
+    })
+    message.value = '广告屏蔽已激活，有效期8小时'
+  }
+  catch {
+    message.value = '广告屏蔽激活失败'
+  }
+}
+
 // 搜索功能处理
 async function handleSearch(query: string) {
   try {
@@ -132,8 +157,21 @@ onMounted(async () => {
             <MessageComponent :message="message" />
           </div>
 
-          <!-- 设置按钮 -->
-          <div class="flex justify-end animate-fade-in" style="animation-delay: 400ms;">
+          <!-- 操作按钮区域 -->
+          <div class="flex justify-end gap-2 animate-fade-in" style="animation-delay: 400ms;">
+            <!-- 屏蔽广告按钮 -->
+            <button
+              class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 opacity-60 hover:opacity-100"
+              style="color: rgb(20, 20, 19);"
+              title="屏蔽广告弹窗"
+              @click="blockAds"
+            >
+              <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </button>
+
+            <!-- 设置按钮 -->
             <button
               class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 opacity-60 hover:opacity-100"
               style="color: rgb(20, 20, 19);"

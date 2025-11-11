@@ -12,7 +12,7 @@ const version = packageJson.version
 // XML模板
 const xmlTemplate = `<?xml version='1.0' encoding='UTF-8'?>
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='YOUR_EXTENSION_ID'>
+  <app appid='mhmijglphchknlffcjgbnbkohcbbihmm'>
     <updatecheck codebase='https://github.com/bee1an/shit-debug/releases/download/v${version}/extension.zip' version='${version}' />
   </app>
 </gupdate>`

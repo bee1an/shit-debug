@@ -178,20 +178,6 @@ defineExpose({
           <span class="font-medium">检测页面 iframe</span>
         </span>
       </button>
-
-      <!-- 次要操作按钮 -->
-      <button
-        class="w-full py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-        style="color: rgb(20, 20, 19); border-radius: 7.5px;"
-        @click="blockAds"
-      >
-        <span class="flex items-center justify-center">
-          <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-          </svg>
-          <span class="font-medium">屏蔽广告弹窗</span>
-        </span>
-      </button>
     </div>
 
     <!-- iframe 列表 -->
