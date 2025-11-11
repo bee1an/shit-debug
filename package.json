@@ -72,7 +72,8 @@
     "webextension-polyfill": "^0.12.0"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged && pnpm update-xml"
+    "pre-commit": "pnpm lint-staged && pnpm update-xml",
+    "post-commit": "git add updates.xml && git commit --amend --no-edit --no-verify"
   },
   "lint-staged": {
     "*": "eslint --fix"
