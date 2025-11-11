@@ -1,7 +1,7 @@
 {
   "name": "shit-debug",
   "displayName": "Shit Debug",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "packageManager": "pnpm@9.7.1",
   "description": "高效debug的临时解决方案",
@@ -29,7 +29,8 @@
     "test:e2e": "playwright test",
     "postinstall": "simple-git-hooks",
     "typecheck": "tsc --noEmit",
-    "update-xml": "esno scripts/update-xml.ts"
+    "update-xml": "esno scripts/update-xml.ts",
+    "auto-tag": "esno scripts/auto-tag.ts"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.27.0",
@@ -72,8 +73,7 @@
     "webextension-polyfill": "^0.12.0"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged && pnpm update-xml",
-    "post-commit": "git add updates.xml && git commit --amend --no-edit --no-verify"
+    "pre-commit": "pnpm lint-staged && pnpm update-xml && git add updates.xml && git commit --amend --no-edit --no-verify && pnpm auto-tag"
   },
   "lint-staged": {
     "*": "eslint --fix"
