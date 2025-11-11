@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { usePopupSettings } from './usePopupSettings'
 import { type OpenKeyParseResult, getAndParseOpenKey, hasValidOpenKeyConfig, replaceOpenKeyInUrl } from '~/utils/openKey'
 
 // Chrome API类型声明
@@ -31,6 +32,9 @@ export function useIframeDetector() {
   const iframeList = ref<IframeInfo[]>([])
   const selectedIframe = ref<IframeInfo | null>(null)
 
+  // 使用设置管理composable
+  const { buildUrl } = usePopupSettings()
+
   /**
    * 处理单个iframe的openKey获取和URL替换
    * @param iframe 原始iframe信息
@@ -58,7 +62,7 @@ export function useIframeDetector() {
 
         if (openKeyResult.success && openKeyResult.data?.result.openKey && iframe.hashContent) {
           try {
-            const baseUrl = `http://localhost:4000${iframe.hashContent}`
+            const baseUrl = buildUrl(iframe.hashContent)
             const updatedUrl = replaceOpenKeyInUrl(baseUrl, openKeyResult.data.result.openKey)
             processedIframe.updatedUrl = updatedUrl
             break // 成功则跳出循环
