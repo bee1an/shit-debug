@@ -1,0 +1,70 @@
+name: Build and Release Chrome Extension
+
+on:
+  push:
+    tags:
+      - 'v*' # 只在版本标签（如 v1.0.0）推送时触发工作流
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 如果未启用 lastUpdated，则不需要
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.20.2
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build
+        run: pnpm run build
+      - name: Create release zip
+        run: |
+          cd extension
+          zip -r ../extension.zip .
+
+      # - name: Generate Update Manifest XML
+      #   id: generate_xml
+      #   run: |
+      #     VERSION="${{ github.ref_name }}"
+      #     CLEAN_VERSION="${VERSION#v}"
+
+      #     EXTENSION_ID="YOUR_EXTENSION_ID"
+
+      #     DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/extension.zip"
+
+      #     # 4. 生成 XML 内容并保存到 updates.xml
+      #     echo "<?xml version='1.0' encoding='UTF-8'?>" > updates.xml
+      #     echo "<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>" >> updates.xml
+      #     echo "  <app appid='${EXTENSION_ID}'>" >> updates.xml
+      #     echo "    <updatecheck codebase='${DOWNLOAD_URL}' version='${CLEAN_VERSION}' />" >> updates.xml
+      #     echo "  </app>" >> updates.xml
+      #     echo "</gupdate>" >> updates.xml
+
+      #     echo "XML file generated successfully."
+      #     cat updates.xml
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'Release ${{ github.ref_name }}'
+          body: This release contains the built browser extension and the update manifest XML.
+          draft: false
+          prerelease: false
+          # 同时指定 ZIP 和 XML 两个文件
+          files: |
+            ./extension.zip
+          # 确保 ZIP 文件的命名与 XML 中 codebase URL 保持一致
+          asset_name: extension.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
