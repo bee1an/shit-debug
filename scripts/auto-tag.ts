@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import process from 'node:process'
+import * as process from 'node:process'
 import { execSync } from 'node:child_process'
 
 const packageJsonPath = join(process.cwd(), 'package.json')
@@ -62,15 +62,12 @@ function isFileChangedInCommit(): boolean {
 }
 
 /**
- * 获取HEAD提交中的package.json版本
+ * 获取最新的版本tag（作为上一个版本）
  */
 function getPreviousVersion(): string {
-  const result = execSync(`${gitCommand} show HEAD:package.json`, {
-    encoding: 'utf-8',
-    stdio: 'pipe',
-  })
-  const packageJson = JSON.parse(result)
-  return packageJson.version || ''
+  const latestTag = getLatestVersionTag()
+  // 去掉 'v' 前缀，只返回版本号
+  return latestTag.startsWith('v') ? latestTag.slice(1) : latestTag
 }
 
 /**
@@ -86,7 +83,11 @@ function createTag(version: string): void {
  * 主函数
  */
 function main(): void {
-  if (!isFileChangedInCommit()) {
+  // 检查命令行参数，支持 --skip-check 或 --force
+  const skipCheck = process.argv.includes('--skip-check') || process.argv.includes('--force')
+
+  // 如果未传递跳过参数，则检查文件是否变更
+  if (!skipCheck && !isFileChangedInCommit()) {
     return
   }
 
