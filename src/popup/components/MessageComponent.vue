@@ -138,7 +138,7 @@ const iconType = computed(() => {
 
       <!-- 消息内容 -->
       <div class="flex-1">
-        <div class="font-medium" :style="{ color: messageStyle.iconColor }">
+        <div class="font-medium break-all" :style="{ color: messageStyle.iconColor }">
           {{ message }}
         </div>
       </div>

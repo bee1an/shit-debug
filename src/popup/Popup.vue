@@ -5,6 +5,7 @@ import IframeComponent from './components/IframeComponent.vue'
 import MessageComponent from './components/MessageComponent.vue'
 import SettingsPage from './SettingsPage.vue'
 import { usePopupSettings } from '~/composables/usePopupSettings'
+import { getAndParseOpenKey, hasValidOpenKeyConfig } from '~/utils/openKey'
 
 // 页面状态管理
 const currentView = ref<'main' | 'settings'>('main')
@@ -18,6 +19,11 @@ const iframeComponentRef = ref<InstanceType<typeof IframeComponent>>()
 
 // 统一消息状态
 const message = ref('')
+
+// 获取OpenKey按钮状态
+type OpenKeyButtonState = 'idle' | 'loading' | 'success' | 'error'
+const openKeyButtonState = ref<OpenKeyButtonState>('idle')
+const isGettingOpenKey = ref(false)
 
 // 广告屏蔽功能
 async function blockAds() {
@@ -111,6 +117,65 @@ function handleClickOutside() {
   }
 }
 
+// 获取OpenKey功能
+async function handleGetOpenKey() {
+  if (isGettingOpenKey.value)
+    return
+
+  isGettingOpenKey.value = true
+  openKeyButtonState.value = 'loading'
+  message.value = '正在获取OpenKey...'
+
+  try {
+    // 检查是否有有效配置
+    const hasConfig = await hasValidOpenKeyConfig()
+    if (!hasConfig) {
+      message.value = '未找到有效的请求配置，请先访问目标页面'
+      openKeyButtonState.value = 'error'
+      setTimeout(() => {
+        openKeyButtonState.value = 'idle'
+      }, 2000)
+      return
+    }
+
+    // 获取并解析OpenKey
+    const result = await getAndParseOpenKey()
+
+    if (result.success && result.data?.result?.openKey) {
+      const openKey = result.data.result.openKey
+
+      // 复制到剪贴板
+      try {
+        await navigator.clipboard.writeText(openKey)
+        message.value = `OpenKey获取成功并已复制到剪贴板: ${openKey}`
+      }
+      catch {
+        message.value = `OpenKey获取成功: ${openKey}`
+      }
+
+      openKeyButtonState.value = 'success'
+    }
+    else {
+      const errorMsg = result.error || 'OpenKey获取失败'
+      message.value = `获取失败: ${errorMsg}`
+      openKeyButtonState.value = 'error'
+    }
+  }
+  catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    message.value = `获取失败: ${errorMessage}`
+    openKeyButtonState.value = 'error'
+  }
+  finally {
+    isGettingOpenKey.value = false
+
+    // 2秒后恢复按钮状态
+    setTimeout(() => {
+      openKeyButtonState.value = 'idle'
+    }, 2000)
+  }
+}
+
 // 初始化
 onMounted(async () => {
   await initSettings()
@@ -159,6 +224,38 @@ onMounted(async () => {
 
           <!-- 操作按钮区域 -->
           <div class="flex justify-end gap-2 animate-fade-in" style="animation-delay: 400ms;">
+            <!-- 获取OpenKey按钮 -->
+            <button
+              class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 opacity-60 hover:opacity-100"
+              :class="{
+                'opacity-100': openKeyButtonState !== 'idle',
+                'bg-green-100': openKeyButtonState === 'success',
+                'bg-red-100': openKeyButtonState === 'error',
+              }"
+              style="color: rgb(20, 20, 19);"
+              title="获取OpenKey"
+              :disabled="isGettingOpenKey"
+              @click="handleGetOpenKey"
+            >
+              <!-- 加载状态 -->
+              <svg v-if="openKeyButtonState === 'loading'" class="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <!-- 成功状态 -->
+              <svg v-else-if="openKeyButtonState === 'success'" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <!-- 错误状态 -->
+              <svg v-else-if="openKeyButtonState === 'error'" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <!-- 默认状态 -->
+              <svg v-else class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+            </button>
+
             <!-- 屏蔽广告按钮 -->
             <button
               class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 opacity-60 hover:opacity-100"
