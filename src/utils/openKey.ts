@@ -193,7 +193,7 @@ function parseHashParams(hash: string): Record<string, string> {
   const params: Record<string, string> = {}
 
   // 移除开头的 # 或 ?
-  const cleanHash = hash.replace(/^#/, '').replace(/^\?/, '')
+  const cleanHash = hash.replace(/^#/, '').replaceAll(/^\?/, '')
 
   // 如果hash中没有查询参数，返回空对象
   if (!cleanHash.includes('&') && !cleanHash.includes('=')) {

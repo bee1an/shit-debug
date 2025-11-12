@@ -12,7 +12,7 @@ declare const chrome: {
   }
 }
 
-interface IframeInfo {
+export interface IframeInfo {
   index: number
   src?: string
   hashContent?: string
@@ -28,7 +28,6 @@ interface IframeDetectionResult {
 export function useIframeDetector() {
   const isProcessing = ref(false)
   const message = ref('')
-  const copiedContent = ref('')
   const iframeList = ref<IframeInfo[]>([])
   const selectedIframe = ref<IframeInfo | null>(null)
 
@@ -181,7 +180,6 @@ export function useIframeDetector() {
   async function copyToClipboard(text: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text)
-      copiedContent.value = text
       message.value = '已复制到剪切板'
 
       await browser.storage.local.set({
@@ -279,7 +277,6 @@ export function useIframeDetector() {
   return {
     isProcessing,
     message,
-    copiedContent,
     iframeList,
     selectedIframe,
     handleIframeDetection,

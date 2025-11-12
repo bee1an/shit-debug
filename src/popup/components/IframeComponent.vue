@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import type { Tabs } from 'webextension-polyfill'
+import type { IframeInfo } from '~/composables/useIframeDetector'
 import { useIframeDetector } from '~/composables/useIframeDetector'
 import { usePopupSettings } from '~/composables/usePopupSettings'
 
 // 定义事件
 const emit = defineEmits<{
-  'copy-content': [content: string]
+  copyContent: [content: string]
 }>()
 
 // 使用iframe检测composable
 const {
   isProcessing,
   message,
-  copiedContent,
   iframeList,
   selectedIframe,
   handleIframeDetection,
@@ -62,11 +61,8 @@ async function blockAds() {
 }
 
 // 跳转到配置的host
-async function navigateToHost() {
-  if (!copiedContent.value)
-    return
-
-  const url = buildUrl(copiedContent.value)
+async function navigateToHost(shortUrl: string) {
+  const url = buildUrl(shortUrl)
   const tab = await browser.tabs.create({ url, active: false })
 
   if (!tab.id)
@@ -133,12 +129,12 @@ async function openAllIframes() {
 }
 
 // 处理iframe跳转
-function handleIframeNavigate(iframe: any) {
+function handleIframeNavigate(iframe: IframeInfo) {
   const content = iframe.updatedUrl || iframe.hashContent || ''
+
   if (content) {
-    // eslint-disable-next-line vue/custom-event-name-casing
-    emit('copy-content', content)
-    navigateToHost()
+    emit('copyContent', content)
+    navigateToHost(content)
   }
 }
 
