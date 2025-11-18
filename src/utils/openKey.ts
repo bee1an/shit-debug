@@ -192,16 +192,13 @@ export async function getAndParseOpenKey(timeoutMs = 10000): Promise<OpenKeyPars
 function parseHashParams(hash: string): Record<string, string> {
   const params: Record<string, string> = {}
 
-  // 移除开头的 # 或 ?
-  const cleanHash = hash.replace(/^#/, '').replaceAll(/^\?/, '')
-
   // 如果hash中没有查询参数，返回空对象
-  if (!cleanHash.includes('&') && !cleanHash.includes('=')) {
+  if (!hash.includes('&') && !hash.includes('=')) {
     return params
   }
 
   // 分割参数
-  const paramPairs = cleanHash.split('&')
+  const paramPairs = hash.split('&')
 
   for (const pair of paramPairs) {
     const [key, value] = pair.split('=')
@@ -225,7 +222,7 @@ function paramsToHash(params: Record<string, string>): string {
     paramPairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
   }
 
-  return paramPairs.length > 0 ? `#${paramPairs.join('&')}` : ''
+  return paramPairs.length > 0 ? `${paramPairs.join('&')}` : ''
 }
 
 /**
@@ -246,13 +243,14 @@ export function replaceOpenKeyInUrl(url: string, newOpenKey: string): string {
 
     // 如果search中没有，检查hash中是否有openKey
     if (urlObj.hash) {
-      const hashContent = urlObj.hash.slice(1) // 移除 #
-      const hashParams = parseHashParams(hashContent)
+      const [perfix, params] = urlObj.hash.replace(/^#/, '').split('?')
+
+      const hashParams = parseHashParams(params)
 
       if (hashParams.openKey !== undefined) {
         // 更新hash中的openKey
         hashParams.openKey = newOpenKey
-        urlObj.hash = paramsToHash(hashParams)
+        urlObj.hash = `${perfix}?${paramsToHash(hashParams)}`
         return urlObj.toString()
       }
     }

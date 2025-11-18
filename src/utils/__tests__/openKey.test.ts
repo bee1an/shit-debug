@@ -8,22 +8,19 @@ function paramsToHash(params: Record<string, string>): string {
     paramPairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
   }
 
-  return paramPairs.length > 0 ? `#${paramPairs.join('&')}` : ''
+  return paramPairs.length > 0 ? `${paramPairs.join('&')}` : ''
 }
 
 function parseHashParams(hash: string): Record<string, string> {
   const params: Record<string, string> = {}
 
-  // 移除开头的 # 或 ?
-  const cleanHash = hash.replace(/^#/, '').replaceAll(/^\?/, '')
-
   // 如果hash中没有查询参数，返回空对象
-  if (!cleanHash.includes('&') && !cleanHash.includes('=')) {
+  if (!hash.includes('&') && !hash.includes('=')) {
     return params
   }
 
   // 分割参数
-  const paramPairs = cleanHash.split('&')
+  const paramPairs = hash.split('&')
 
   for (const pair of paramPairs) {
     const [key, value] = pair.split('=')
@@ -47,13 +44,14 @@ function replaceOpenKeyInUrl(url: string, newOpenKey: string): string {
 
     // 如果search中没有，检查hash中是否有openKey
     if (urlObj.hash) {
-      const hashContent = urlObj.hash.slice(1) // 移除 #
-      const hashParams = parseHashParams(hashContent)
+      const [perfix, params] = urlObj.hash.replace(/^#/, '').split('?')
+
+      const hashParams = parseHashParams(params)
 
       if (hashParams.openKey !== undefined) {
         // 更新hash中的openKey
         hashParams.openKey = newOpenKey
-        urlObj.hash = paramsToHash(hashParams)
+        urlObj.hash = `${perfix}?${paramsToHash(hashParams)}`
         return urlObj.toString()
       }
     }
@@ -96,6 +94,9 @@ describe('openKey', () => {
   it('should be true', () => {
     decodeURIComponent('openKey')
     expect(replaceOpenKeyInUrl('https://example.com/#/sub?flags=1&openKey=123', 'openKey'))
-      .toMatchInlineSnapshot(`"https://example.com/#/sub?openKey=openKey"`)
+      .toMatchInlineSnapshot(`"https://example.com/#/sub?flags=1&openKey=openKey"`)
+
+    expect(replaceOpenKeyInUrl('https://cdpre.tfsmy.com/frontend/smart-front-b/#/collectionJT?openKey=68e714806f9e9800071a87bc1763445575_5101&ui=25ccf62f7470569e239bebe4a530872b888872952bf4694350a04520db455516&cityCode=5101&baseUrl=https://cdszzx.tfsmy.com/cbase/bud-cloud-governance-biz/&subjectCode=510115001&subjectName=柳城街道', 'openKey'))
+      .toMatchInlineSnapshot(`"https://cdpre.tfsmy.com/frontend/smart-front-b/#/collectionJT?openKey=openKey&ui=25ccf62f7470569e239bebe4a530872b888872952bf4694350a04520db455516&cityCode=5101&baseUrl=https%3A%2F%2Fcdszzx.tfsmy.com%2Fcbase%2Fbud-cloud-governance-biz%2F&subjectCode=510115001&subjectName=%E6%9F%B3%E5%9F%8E%E8%A1%97%E9%81%93"`)
   })
 })
