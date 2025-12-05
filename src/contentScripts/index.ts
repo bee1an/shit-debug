@@ -1,3 +1,5 @@
+import './autoFill'
+
 (() => {
   // 检查是否在目标域名下
   const isTargetDomain = window.location.hostname === 'cdszzx.tfsmy.com'

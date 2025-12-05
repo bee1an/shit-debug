@@ -50,6 +50,27 @@ async function blockAds() {
   }
 }
 
+// 自动填充功能
+async function handleAutoFill() {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (!tab.id) {
+      message.value = '无法获取当前标签页信息'
+      return
+    }
+
+    await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_AUTO_FILL' })
+    // No message needed here as content script handles the UI interaction
+    // But we can show a hint in popup if needed, though popup usually closes
+    window.close() // Close popup so user can interact with page
+  }
+  catch (error) {
+    console.error('AutoFill error:', error)
+    const err = error as Error
+    message.value = `通信错误: ${err.message || '未知错误'} \n请确保页面已刷新`
+  }
+}
+
 // 搜索功能处理
 async function handleSearch(query: string) {
   try {
@@ -260,6 +281,18 @@ onMounted(async () => {
           >
             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </button>
+
+          <!-- 自动填充按钮 -->
+          <button
+            class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 opacity-60 hover:opacity-100"
+            style="color: rgb(20, 20, 19);"
+            title="自动填充"
+            @click="handleAutoFill"
+          >
+            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
 
