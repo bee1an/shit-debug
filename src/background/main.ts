@@ -8,7 +8,21 @@ if (import.meta.hot) {
   import('./contentScriptHMR')
 }
 
-browser.runtime.onInstalled.addListener((): void => {})
+browser.runtime.onInstalled.addListener((): void => {
+  // 设置点击扩展图标时打开 sidepanel
+  const browserAny = browser as any
+  if (browserAny.sidePanel) {
+    browserAny.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  }
+})
+
+// 点击扩展图标时打开 sidepanel (备用方案)
+browser.action.onClicked.addListener(async (tab) => {
+  const browserAny = browser as any
+  if (browserAny.sidePanel && tab.id) {
+    await browserAny.sidePanel.open({ tabId: tab.id })
+  }
+})
 
 let previousTabId = 0
 

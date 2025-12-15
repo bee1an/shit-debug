@@ -8,3 +8,23 @@ declare module 'webext-bridge' {
     'get-current-tab': ProtocolWithReturn<{ tabId: number }, { title?: string }>
   }
 }
+
+// Chrome sidePanel API 类型声明
+declare namespace chrome {
+  namespace sidePanel {
+    interface PanelBehavior {
+      openPanelOnActionClick?: boolean
+    }
+    interface OpenOptions {
+      tabId?: number
+      windowId?: number
+    }
+    function setPanelBehavior(behavior: PanelBehavior): Promise<void>
+    function open(options: OpenOptions): Promise<void>
+  }
+}
+
+// 扩展 browser 类型
+declare namespace browser {
+  const sidePanel: typeof chrome.sidePanel | undefined
+}
