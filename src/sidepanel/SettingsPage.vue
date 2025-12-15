@@ -104,90 +104,82 @@ function handleKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <main class="relative animate-fade-in" style="background-color: rgb(250, 249, 245); color: rgb(20, 20, 19); font-family: 'Anthropic Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <main class="h-full bg-gray-50 flex flex-col font-sans animate-fade-in">
     <!-- 页面头部 -->
-    <div class="flex items-center justify-between mb-6">
-      <div class="flex items-center">
-        <button
-          class="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 hover:scale-110 transform"
-          style="color: rgb(20, 20, 19);"
-          title="返回主页面"
-          @click="handleBack"
-        >
-          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div>
-          <h1 class="text-xl font-semibold" style="color: rgb(20, 20, 19);">
-            设置
-          </h1>
-        </div>
-      </div>
+    <div class="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3">
+      <button
+        class="p-2 -ml-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+        title="返回主页面"
+        @click="handleBack"
+      >
+        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <h1 class="text-lg font-semibold text-gray-900">
+        设置
+      </h1>
     </div>
 
     <!-- 设置内容 -->
-    <div class="space-y-5">
+    <div class="flex-1 overflow-y-auto p-4 space-y-6">
       <!-- Host前缀配置 -->
-      <div class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
-        <!-- 输入表单 -->
-        <div class="space-y-4">
-          <div>
-            <div class="flex items-center gap-3">
-              <label class="text-sm font-medium whitespace-nowrap" style="color: rgb(20, 20, 19);">
-                Host 前缀
-              </label>
-              <BaseInput
-                v-model="hostInput"
-                type="url"
-                placeholder="例如: http://localhost:3000"
-                class="flex-1"
-                :error="!!errorMessage"
-                :disabled="isSaving"
-                @keydown="handleKeydown"
-              />
-            </div>
+      <section>
+        <div class="mb-2 px-1 text-sm font-medium text-gray-500">
+          基础配置
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-4">
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-700">
+              Host 前缀
+            </label>
+            <BaseInput
+              v-model="hostInput"
+              type="url"
+              placeholder="例如: http://localhost:3000"
+              class="w-full"
+              :error="!!errorMessage"
+              :disabled="isSaving"
+              @keydown="handleKeydown"
+            />
+            <p class="text-xs text-gray-400">
+              用于构建 iframe 跳转的完整 URL
+            </p>
           </div>
 
           <!-- 操作按钮 -->
-          <div class="flex gap-3">
+          <div class="flex gap-3 pt-2">
             <button
-              class="flex-1 py-3 px-4 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-              style="background: linear-gradient(135deg, rgb(54, 54, 53) 0%, rgb(84, 84, 83) 100%); border-radius: 10px;"
+              class="flex-1 py-2.5 px-4 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center gap-2"
+              :class="isSaving
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-gray-900 hover:bg-black shadow-sm hover:shadow-md active:scale-[0.99]'"
               :disabled="isSaving || !hostInput.trim()"
               @click="handleSave"
             >
-              <span v-if="isSaving" class="flex items-center justify-center">
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span class="font-medium">保存中...</span>
-              </span>
-              <span v-else class="flex items-center justify-center">
-                <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <span class="font-medium">保存配置</span>
-              </span>
+              <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <svg v-else class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{{ isSaving ? '保存中...' : '保存配置' }}</span>
             </button>
 
             <button
-              class="py-3 px-4 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-              style="color: rgb(20, 20, 19); border-radius: 7.5px;"
+              class="px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg transition-all duration-200 shadow-sm flex items-center justify-center gap-2 min-w-[5rem]"
               :disabled="isSaving"
               @click="handleReset"
             >
-              <span class="flex items-center justify-center">
-                <svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span class="font-medium">重置</span>
-              </span>
+              <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>重置</span>
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- 消息提示 -->
       <Transition
@@ -196,26 +188,14 @@ function handleKeydown(event: KeyboardEvent) {
       >
         <div
           v-if="saveMessage || errorMessage"
-          class="p-4 rounded-2xl text-sm break-words shadow-lg border-2 relative overflow-hidden animate-fade-in"
-          :style="{
-            backgroundColor: saveMessage ? 'rgb(240, 253, 244)' : 'rgb(254, 242, 242)',
-            borderColor: saveMessage ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)',
-          }"
+          class="p-4 rounded-xl text-sm shadow-sm border relative overflow-hidden animate-fade-in"
+          :class="saveMessage ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
         >
-          <!-- 状态指示条 -->
-          <div
-            class="absolute top-0 left-0 right-0 h-1"
-            :style="{
-              backgroundColor: saveMessage ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)',
-            }"
-          />
-
-          <div class="flex items-start">
-            <!-- 动态图标 -->
-            <div class="mr-3 mt-0.5 flex-shrink-0">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
               <svg
                 v-if="saveMessage"
-                class="w-5 h-5 text-green-600"
+                class="w-5 h-5 text-green-500"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -225,7 +205,7 @@ function handleKeydown(event: KeyboardEvent) {
               </svg>
               <svg
                 v-else
-                class="w-5 h-5 text-red-600"
+                class="w-5 h-5 text-red-500"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
@@ -234,17 +214,8 @@ function handleKeydown(event: KeyboardEvent) {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-
-            <!-- 消息内容 -->
-            <div class="flex-1">
-              <div
-                class="font-medium"
-                :style="{
-                  color: saveMessage ? 'rgb(22, 101, 52)' : 'rgb(185, 28, 28)',
-                }"
-              >
-                {{ saveMessage || errorMessage }}
-              </div>
+            <div class="flex-1 font-medium">
+              {{ saveMessage || errorMessage }}
             </div>
           </div>
         </div>
@@ -287,33 +258,5 @@ function handleKeydown(event: KeyboardEvent) {
 .message-slide-leave-to {
   opacity: 0;
   transform: translateY(-10px);
-}
-
-/* 背景装饰 */
-main::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(
-    circle,
-    rgba(59, 130, 246, 0.03) 0%,
-    rgba(34, 197, 94, 0.03) 50%,
-    transparent 100%
-  );
-  animation: rotate 30s linear infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

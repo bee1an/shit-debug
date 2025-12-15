@@ -37,10 +37,13 @@ function showLatestHistory() {
   }
 }
 
-// 处理输入框获得焦点时全选内容
+// 处理输入框获得焦点时全选内容并展开历史
 function handleInputFocus(event: FocusEvent) {
   const target = event.target as HTMLInputElement
   target.select()
+  if (searchHistory.value.length > 0) {
+    isHistoryListExpanded.value = true
+  }
 }
 
 // 切换历史记录列表展开/收起状态
@@ -143,18 +146,18 @@ defineExpose({
 </script>
 
 <template>
-  <div class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm relative">
+  <div class="relative" @click.stop>
     <div class="flex gap-2">
       <BaseInput
         v-model="searchInput"
-        placeholder="输入要搜索的导航内容"
-        class="flex-1"
+        placeholder="搜索导航内容..."
+        class="flex-1 shadow-sm"
         @keydown="handleKeydown"
         @focus="handleInputFocus"
       />
       <button
-        class="px-4 py-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all duration-200 flex items-center justify-center"
-        style="color: rgb(20, 20, 19); border-radius: 7.5px;"
+        class="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg shadow-sm hover:shadow transition-all duration-200 flex items-center justify-center min-w-[3rem]"
+        title="搜索"
         @click="handleSearch"
       >
         <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,75 +166,52 @@ defineExpose({
       </button>
     </div>
 
-    <div class="mt-2 text-xs" style="color: rgb(94, 93, 89);">
-      使用上下键浏览历史记录
+    <!-- 提示文本 -->
+    <div class="mt-1.5 px-1 flex justify-between items-center text-xs text-gray-400">
+      <span>使用上下键浏览历史</span>
+      <span v-if="searchHistory.length" class="cursor-pointer hover:text-gray-600 transition-colors" @click="toggleHistoryList">
+        {{ isHistoryListExpanded ? '收起历史' : '展开历史' }}
+      </span>
     </div>
 
-    <!-- 历史记录列表 -->
+    <!-- 历史记录列表 - 浮动面板 -->
     <div
-      v-if="showHistoryList && getFormattedHistoryList().length > 0"
-      class="mt-2 bg-white border border-gray-200 rounded-lg shadow-sm"
-      style="border-radius: 7.5px;"
-      @click.stop
+      v-if="showHistoryList && getFormattedHistoryList().length > 0 && isHistoryListExpanded"
+      class="mt-2 bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden animate-fade-in"
     >
-      <!-- 历史记录列表头部 -->
-      <div
-        class="p-2 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-        @click="toggleHistoryList"
-      >
-        <span class="text-xs font-medium" style="color: rgb(94, 93, 89);">
-          搜索历史 ({{ isHistoryListExpanded ? getFormattedHistoryList().length : '1' }}/{{ getFormattedHistoryList().length }})
-        </span>
-        <div class="flex items-center gap-2">
-          <button
-            class="text-xs px-2 py-1 text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-            @click.stop="clearAllHistory"
-          >
-            清空全部
-          </button>
-          <svg
-            class="w-4 h-4 transition-transform duration-200"
-            :class="{ 'rotate-180': isHistoryListExpanded }"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            style="color: rgb(94, 93, 89);"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </div>
-
-      <!-- 历史记录列表内容 -->
-      <div
-        class="overflow-hidden transition-all duration-300 scrollbar-hide"
-        :class="{ 'overflow-y-auto': isHistoryListExpanded }"
-        :style="{
-          maxHeight: isHistoryListExpanded ? '240px' : '60px',
-        }"
-      >
-        <div class="py-1">
-          <div
-            v-for="(item, index) in (isHistoryListExpanded ? getFormattedHistoryList() : getFormattedHistoryList().slice(0, 1))"
-            :key="index"
-            class="group px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between transition-colors duration-200"
-            @click="selectHistoryItem(item)"
-          >
-            <div class="flex-1 min-w-0">
-              <div class="text-sm truncate" style="color: rgb(20, 20, 19);">
-                {{ item.text }}
-              </div>
+      <div class="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
+        <div
+          v-for="(item, index) in getFormattedHistoryList()"
+          :key="index"
+          class="group px-3 py-2.5 hover:bg-gray-100 cursor-pointer flex items-center justify-between transition-colors duration-150 border-b border-gray-50 last:border-0"
+          :class="{ 'bg-gray-100': index === currentHistoryIndex }"
+          @click="selectHistoryItem(item)"
+        >
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="text-sm text-gray-700 truncate group-hover:text-gray-900">
+              {{ item.text }}
             </div>
-            <button
-              class="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded transition-all duration-200"
-              @click="deleteHistoryItem(item, $event)"
-            >
-              <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
           </div>
+          <button
+            class="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all duration-200"
+            title="删除"
+            @click="deleteHistoryItem(item, $event)"
+          >
+            <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 清空按钮 -->
+        <div
+          class="px-3 py-2 bg-gray-50 border-t border-gray-100 text-xs text-center text-gray-500 hover:text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+          @click="clearAllHistory"
+        >
+          清空搜索历史
         </div>
       </div>
     </div>
@@ -239,11 +219,5 @@ defineExpose({
 </template>
 
 <style scoped>
-.scrollbar-hide {
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  scrollbar-width: none;  /* Firefox */
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Safari and Chrome */
-}
+/* 组件样式 */
 </style>

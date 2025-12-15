@@ -7,45 +7,11 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// 计算消息样式
-const messageStyle = computed(() => {
-  if (!props.message)
-    return {}
+// 状态类型
+type MessageStatus = 'success' | 'loading' | 'search' | 'error' | 'none'
 
-  let backgroundColor = 'rgb(254, 242, 242)'
-  let borderColor = 'rgb(239, 68, 68)'
-  let iconColor = 'rgb(185, 28, 28)'
-  let statusColor = 'rgb(239, 68, 68)'
-
-  if (props.message.includes('已复制') || props.message.includes('成功')) {
-    backgroundColor = 'rgb(240, 253, 244)'
-    borderColor = 'rgb(34, 197, 94)'
-    iconColor = 'rgb(22, 101, 52)'
-    statusColor = 'rgb(34, 197, 94)'
-  }
-  else if (props.message.includes('正在检测')) {
-    backgroundColor = 'rgb(239, 246, 255)'
-    borderColor = 'rgb(59, 130, 246)'
-    iconColor = 'rgb(37, 99, 235)'
-    statusColor = 'rgb(59, 130, 246)'
-  }
-  else if (props.message.includes('找到') && !props.message.includes('复制')) {
-    backgroundColor = 'rgb(254, 252, 232)'
-    borderColor = 'rgb(250, 204, 21)'
-    iconColor = 'rgb(161, 98, 7)'
-    statusColor = 'rgb(250, 204, 21)'
-  }
-
-  return {
-    backgroundColor,
-    borderColor,
-    iconColor,
-    statusColor,
-  }
-})
-
-// 计算图标类型
-const iconType = computed(() => {
+// 计算图标类型和状态
+const status = computed<MessageStatus>(() => {
   if (!props.message)
     return 'none'
 
@@ -62,31 +28,74 @@ const iconType = computed(() => {
     return 'error'
   }
 })
+
+// 根据状态返回样式类
+const wrapperClasses = computed(() => {
+  switch (status.value) {
+    case 'success':
+      return 'bg-green-50 border-green-200 text-green-700'
+    case 'loading':
+      return 'bg-blue-50 border-blue-200 text-blue-700'
+    case 'search':
+      return 'bg-yellow-50 border-yellow-200 text-yellow-700'
+    case 'error':
+      return 'bg-red-50 border-red-200 text-red-700'
+    default:
+      return ''
+  }
+})
+
+const iconClasses = computed(() => {
+  switch (status.value) {
+    case 'success':
+      return 'text-green-500'
+    case 'loading':
+      return 'text-blue-500'
+    case 'search':
+      return 'text-yellow-500'
+    case 'error':
+      return 'text-red-500'
+    default:
+      return ''
+  }
+})
+
+const indicatorClasses = computed(() => {
+  switch (status.value) {
+    case 'success':
+      return 'bg-green-500'
+    case 'loading':
+      return 'bg-blue-500'
+    case 'search':
+      return 'bg-yellow-500'
+    case 'error':
+      return 'bg-red-500'
+    default:
+      return ''
+  }
+})
 </script>
 
 <template>
   <div
     v-if="message"
-    class="p-4 rounded-2xl text-sm break-words shadow-lg border-2 relative overflow-hidden"
-    :style="{
-      backgroundColor: messageStyle.backgroundColor,
-      borderColor: messageStyle.borderColor,
-    }"
+    class="relative overflow-hidden rounded-xl border p-4 shadow-sm transition-all duration-300 animate-fade-in"
+    :class="wrapperClasses"
   >
     <!-- 状态指示条 -->
     <div
-      class="absolute top-0 left-0 right-0 h-1"
-      :style="{ backgroundColor: messageStyle.statusColor }"
+      class="absolute left-0 top-0 h-full w-1"
+      :class="indicatorClasses"
     />
 
-    <div class="flex items-start">
+    <div class="flex items-center gap-3 pl-2">
       <!-- 动态图标 -->
-      <div class="mr-3 mt-0.5 flex-shrink-0">
+      <div class="flex-shrink-0">
         <!-- 成功图标 -->
         <svg
-          v-if="iconType === 'success'"
-          class="w-5 h-5"
-          :style="{ color: messageStyle.iconColor }"
+          v-if="status === 'success'"
+          class="h-5 w-5"
+          :class="iconClasses"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -97,22 +106,23 @@ const iconType = computed(() => {
 
         <!-- 加载图标 -->
         <svg
-          v-else-if="iconType === 'loading'"
-          class="w-5 h-5 animate-pulse"
-          :style="{ color: messageStyle.iconColor }"
+          v-else-if="status === 'loading'"
+          class="h-5 w-5 animate-spin"
+          :class="iconClasses"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
 
         <!-- 搜索图标 -->
         <svg
-          v-else-if="iconType === 'search'"
-          class="w-5 h-5"
-          :style="{ color: messageStyle.iconColor }"
+          v-else-if="status === 'search'"
+          class="h-5 w-5"
+          :class="iconClasses"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -125,8 +135,8 @@ const iconType = computed(() => {
         <!-- 错误图标 -->
         <svg
           v-else
-          class="w-5 h-5"
-          :style="{ color: messageStyle.iconColor }"
+          class="h-5 w-5"
+          :class="iconClasses"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -137,10 +147,8 @@ const iconType = computed(() => {
       </div>
 
       <!-- 消息内容 -->
-      <div class="flex-1">
-        <div class="font-medium break-all" :style="{ color: messageStyle.iconColor }">
-          {{ message }}
-        </div>
+      <div class="flex-1 text-sm font-medium break-all leading-tight">
+        {{ message }}
       </div>
     </div>
   </div>

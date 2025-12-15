@@ -150,120 +150,92 @@ defineExpose({
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div class="space-y-4">
     <!-- 主要操作区域 -->
-    <div class="space-y-3">
-      <!-- 主要按钮：iframe检测 -->
+    <div>
       <button
-        class="w-full py-4 px-4 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-        style="background: linear-gradient(135deg, rgb(54, 54, 53) 0%, rgb(84, 84, 83) 100%); border-radius: 10px;"
+        class="w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center gap-2"
+        :class="isProcessing
+          ? 'bg-gray-400 cursor-not-allowed'
+          : 'bg-gray-900 hover:bg-black shadow-sm hover:shadow-md active:scale-[0.99]'"
         :disabled="isProcessing"
         @click="detectIframes"
       >
-        <span v-if="isProcessing" class="flex items-center justify-center">
-          <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          <span class="font-medium">正在检测页面...</span>
-        </span>
-        <span v-else class="flex items-center justify-center">
-          <svg class="w-5 h-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <span class="font-medium">检测页面 iframe</span>
-        </span>
+        <svg v-if="isProcessing" class="animate-spin w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        <svg v-else class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span>{{ isProcessing ? '正在检测页面...' : '检测页面 iframe' }}</span>
       </button>
     </div>
 
     <!-- iframe 列表 -->
-    <div
-      v-if="iframeList.length"
-      class="p-4 bg-white rounded-xl border border-gray-100 shadow-sm"
-      style="border-radius: 7.5px;"
-    >
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-sm font-medium" style="color: rgb(20, 20, 19); font-weight: 500;">
-          选择 iframe ({{ iframeList.length }} 个)
-        </div>
+    <div v-if="iframeList.length" class="space-y-2">
+      <div class="flex items-center justify-between px-1">
+        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          发现 {{ iframeList.length }} 个 iframe
+        </label>
         <button
-          class="text-xs px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md flex items-center"
-          style="color: rgb(20, 20, 19);"
+          class="text-xs px-2.5 py-1 bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded transition-all duration-200 flex items-center gap-1 shadow-sm"
           title="在新标签页中打开所有检测到的iframe"
           @click="openAllIframes"
         >
-          <svg class="w-3 h-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
           </svg>
           打开全部
         </button>
       </div>
-      <div class="space-y-2 max-h-48 overflow-y-auto">
-        <div
-          v-for="iframe in iframeList"
-          :key="iframe.index"
-          class="group relative px-3 py-2 text-left text-sm border rounded-lg transition-all duration-200 cursor-pointer"
-          :class="{
-            'border-blue-200': selectedIframe?.index === iframe.index,
-            'border-gray-200 hover:border-gray-300': selectedIframe?.index !== iframe.index,
-          }"
-          :style="{
-            backgroundColor: selectedIframe?.index === iframe.index ? 'rgb(250, 249, 245)' : 'white',
-            color: 'rgb(20, 20, 19)',
-          }"
-          @click="selectIframe(iframe)"
-        >
-          <div class="flex items-center justify-between">
-            <span class="font-medium">iframe {{ iframe.index + 1 }}</span>
-            <div class="flex items-center gap-1">
-              <span
-                v-if="iframe.hashContent"
-                class="w-2 h-2 rounded-full"
-                style="background-color: rgb(34, 197, 94);"
-                title="包含hash内容"
-              />
-              <span
-                v-if="iframe.openKeyResult?.success"
-                class="w-2 h-2 rounded-full"
-                style="background-color: rgb(59, 130, 246);"
-                title="openKey获取成功"
-              />
-              <span
-                v-if="iframe.openKeyResult && !iframe.openKeyResult.success"
-                class="w-2 h-2 rounded-full"
-                style="background-color: rgb(239, 68, 68);"
-                title="openKey获取失败"
-              />
-            </div>
-          </div>
-          <div
-            v-if="iframe.hashContent"
-            class="mt-1 text-xs truncate"
-            style="color: rgb(94, 93, 89);"
-            :title="iframe.hashContent"
-          >
-            {{ iframe.hashContent }}
-          </div>
-          <div
-            v-else
-            class="mt-1 text-xs"
-            style="color: rgb(154, 153, 150);"
-          >
-            无hash内容
-          </div>
 
-          <!-- Hover时显示的跳转按钮 -->
-          <button
-            v-if="iframe.updatedUrl || iframe.hashContent"
-            class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50"
-            style="color: rgb(20, 20, 19);"
-            :title="iframe.updatedUrl ? '跳转到更新后的URL' : '跳转到配置的host'"
-            @click.stop="handleIframeNavigate(iframe)"
+      <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div class="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 divide-y divide-gray-100">
+          <div
+            v-for="iframe in iframeList"
+            :key="iframe.index"
+            class="group relative px-4 py-3 hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+            :class="{ 'bg-gray-50': selectedIframe?.index === iframe.index }"
+            @click="selectIframe(iframe)"
           >
-            <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </button>
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-medium text-sm text-gray-700">Frame #{{ iframe.index + 1 }}</span>
+              <div class="flex items-center gap-1.5">
+                <span
+                  v-if="iframe.hashContent"
+                  class="w-2 h-2 rounded-full bg-green-500 ring-4 ring-green-50"
+                  title="包含hash内容"
+                />
+                <span
+                  v-if="iframe.openKeyResult?.success"
+                  class="w-2 h-2 rounded-full bg-blue-500 ring-4 ring-blue-50"
+                  title="openKey获取成功"
+                />
+                <span
+                  v-if="iframe.openKeyResult && !iframe.openKeyResult.success"
+                  class="w-2 h-2 rounded-full bg-red-500 ring-4 ring-red-50"
+                  title="openKey获取失败"
+                />
+              </div>
+            </div>
+
+            <div class="text-xs text-gray-500 truncate pr-8 font-mono">
+              {{ iframe.hashContent || '无 Hash 内容' }}
+            </div>
+
+            <!-- 跳转按钮 -->
+            <button
+              v-if="iframe.updatedUrl || iframe.hashContent"
+              class="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+              :title="iframe.updatedUrl ? '跳转到更新后的URL' : '跳转到配置的host'"
+              @click.stop="handleIframeNavigate(iframe)"
+            >
+              <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
