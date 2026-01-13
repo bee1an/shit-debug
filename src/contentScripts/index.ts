@@ -1,4 +1,5 @@
 import './autoFill'
+import './apiDocExtractor'
 
 (() => {
   // 检查是否在目标域名下

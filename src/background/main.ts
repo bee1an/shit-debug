@@ -74,3 +74,73 @@ browser.webRequest.onBeforeSendHeaders.addListener(
   { urls: ['https://cdszzx.tfsmy.com/cbase/bud-cloud-governance-biz/openKey/key*'] },
   ['requestHeaders'],
 )
+
+// API文档提取相关
+interface ExtractedDoc {
+  title: string
+  content: string
+  url: string
+}
+
+interface ExtractionProgress {
+  current: number
+  total: number
+  currentTitle: string
+  status: 'idle' | 'selecting' | 'extracting' | 'done' | 'error'
+  docs: ExtractedDoc[]
+  error?: string
+}
+
+// 存储提取进度
+let extractionProgress: ExtractionProgress = {
+  current: 0,
+  total: 0,
+  currentTitle: '',
+  status: 'idle',
+  docs: [],
+}
+
+// 监听来自content script的提取请求
+browser.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
+  if (message.type === 'START_API_DOC_EXTRACTION') {
+    handleApiDocExtraction(message.links)
+    sendResponse({ success: true })
+    return undefined
+  }
+  else if (message.type === 'GET_EXTRACTION_PROGRESS') {
+    sendResponse(extractionProgress)
+    return undefined
+  }
+  return undefined
+})
+
+// 处理API文档提取 - 只收集链接信息，不立即下载
+async function handleApiDocExtraction(links: { title: string, href: string }[]) {
+  // 直接将所有链接信息存储，不下载
+  const docs: ExtractedDoc[] = links.map(link => ({
+    title: link.title,
+    content: '', // 不需要内容，下载时直接用 URL
+    url: link.href,
+  }))
+
+  extractionProgress = {
+    current: links.length,
+    total: links.length,
+    currentTitle: '',
+    status: 'done',
+    docs,
+  }
+
+  // 通知sidepanel显示结果
+  notifySidepanel()
+}
+
+// 通知sidepanel更新进度
+function notifySidepanel() {
+  browser.runtime.sendMessage({
+    type: 'EXTRACTION_PROGRESS_UPDATE',
+    progress: extractionProgress,
+  }).catch(() => {
+    // sidepanel可能未打开，忽略错误
+  })
+}
