@@ -39,22 +39,18 @@ function getLatestVersionTag(): string {
 }
 
 /**
- * 检查文件是否在本次提交中发生了变更
+ * 检查最近一次 commit 是否修改了 package.json
  */
 function isFileChangedInCommit(): boolean {
   try {
-    // 获取已暂存的变更文件
-    const stagedFiles = execSync(`${gitCommand} diff --cached --name-only`, {
+    // 获取最近一次 commit 中变更的文件
+    const changedFiles = execSync(`${gitCommand} diff-tree --no-commit-id --name-only -r HEAD`, {
       encoding: 'utf-8',
       stdio: 'pipe',
     }).trim().split('\n').filter(Boolean)
 
-    // 检查package.json是否在暂存文件中
-    if (stagedFiles.includes('package.json')) {
-      return true
-    }
-
-    return false
+    // 检查 package.json 是否在变更文件中
+    return changedFiles.includes('package.json')
   }
   catch {
     return false
