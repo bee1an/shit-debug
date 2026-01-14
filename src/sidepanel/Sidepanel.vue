@@ -24,6 +24,9 @@ type OpenKeyButtonState = 'idle' | 'loading' | 'success' | 'error'
 const openKeyButtonState = ref<OpenKeyButtonState>('idle')
 const isGettingOpenKey = ref(false)
 
+// 自动填充状态
+const autoFillActive = ref(false)
+
 // API文档提取状态
 interface ExtractedDoc {
   title: string
@@ -82,9 +85,22 @@ async function handleAutoFill() {
       return
     }
 
-    await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_AUTO_FILL' })
-    // Sidepanel 不需要关闭，用户可以继续使用
-    message.value = '自动填充功能已触发'
+    // 如果 API 提取正在选择中，先取消它
+    if (extractionProgress.value.status === 'selecting') {
+      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_API_DOC_EXTRACT', active: false })
+      extractionProgress.value.status = 'idle'
+    }
+
+    const response = await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_AUTO_FILL' }) as { active?: boolean } | undefined
+    // 使用 content script 返回的实际状态
+    autoFillActive.value = response?.active ?? !autoFillActive.value
+
+    if (autoFillActive.value) {
+      message.value = '自动填充模式已开启，请在页面中点击要填充的区域'
+    }
+    else {
+      message.value = '自动填充模式已关闭'
+    }
   }
   catch (error) {
     console.error('AutoFill error:', error)
@@ -102,9 +118,26 @@ async function handleApiDocExtract() {
       return
     }
 
-    await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_API_DOC_EXTRACT' })
-    extractionProgress.value.status = 'selecting'
-    message.value = 'API文档提取模式已开启'
+    // 如果自动填充正在选择中，先取消它
+    if (autoFillActive.value) {
+      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_AUTO_FILL', active: false })
+      autoFillActive.value = false
+    }
+
+    const response = await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_API_DOC_EXTRACT' }) as { active?: boolean } | undefined
+    // 使用 content script 返回的实际状态
+    const isActive = response?.active ?? false
+
+    if (isActive) {
+      extractionProgress.value.status = 'selecting'
+      message.value = 'API文档提取模式已开启'
+    }
+    else {
+      if (extractionProgress.value.status === 'selecting') {
+        extractionProgress.value.status = 'idle'
+      }
+      message.value = 'API文档提取模式已关闭'
+    }
   }
   catch (error) {
     console.error('ApiDocExtract error:', error)
@@ -123,6 +156,23 @@ function setupExtractionListener() {
       }
       else if (msg.progress.status === 'done') {
         message.value = `已收集 ${msg.progress.docs.length} 个文档，点击下载`
+      }
+    }
+    // 监听自动填充状态变化
+    else if (msg.type === 'AUTO_FILL_STATE_CHANGED') {
+      autoFillActive.value = msg.active
+      if (!msg.active && msg.filled) {
+        message.value = `已填充 ${msg.filled} 个字段`
+      }
+      else if (!msg.active) {
+        message.value = '自动填充模式已关闭'
+      }
+    }
+    // 监听 API 提取状态变化
+    else if (msg.type === 'API_EXTRACT_STATE_CHANGED') {
+      if (!msg.active && extractionProgress.value.status === 'selecting') {
+        extractionProgress.value.status = 'idle'
+        message.value = 'API文档提取模式已关闭'
       }
     }
     return undefined
@@ -477,7 +527,8 @@ onMounted(async () => {
 
         <!-- 自动填充按钮 -->
         <button
-          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
+          class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+          :class="{ 'text-blue-600 bg-blue-50': autoFillActive }"
           title="自动填充"
           @click="handleAutoFill"
         >

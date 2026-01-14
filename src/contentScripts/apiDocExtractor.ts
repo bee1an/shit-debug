@@ -8,14 +8,12 @@ class ApiDocExtractor {
   private overlay: HTMLElement | null = null
   private boundMouseOver: (e: MouseEvent) => void
   private boundClick: (e: MouseEvent) => void
-  private boundKeyDown: (e: KeyboardEvent) => void
   private boundMouseOut: (e: MouseEvent) => void
 
   constructor() {
     this.boundMouseOver = this.handleMouseOver.bind(this)
     this.boundMouseOut = this.handleMouseOut.bind(this)
     this.boundClick = this.handleClick.bind(this)
-    this.boundKeyDown = this.handleKeyDown.bind(this)
 
     this.setupMessageListener()
   }
@@ -26,8 +24,10 @@ class ApiDocExtractor {
     if (runtime) {
       runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
         if (message.type === 'TOGGLE_API_DOC_EXTRACT') {
-          this.setSelectionMode(!this.isSelecting)
-          sendResponse({ success: true })
+          // Support explicit target state or toggle
+          const targetState = message.active !== undefined ? message.active : !this.isSelecting
+          this.setSelectionMode(targetState)
+          sendResponse({ success: true, active: this.isSelecting })
         }
         else if (message.type === 'EXTRACT_PAGE_CONTENT') {
           // 在目标页面中提取内容
@@ -49,10 +49,27 @@ class ApiDocExtractor {
 
     if (this.isSelecting) {
       this.enableSelection()
-      this.showToast('请点击要提取的 ul 或 li 元素 (按 Esc 退出)')
+      this.showToast('请点击要提取的 ul 或 li 元素 (再次点击图标退出)')
     }
     else {
       this.disableSelection()
+      // Notify sidepanel about state change
+      this.notifyStateChange(false)
+    }
+  }
+
+  /**
+   * Notify sidepanel about API extract state change
+   */
+  private notifyStateChange(active: boolean) {
+    const runtime = (window as any).browser?.runtime || (window as any).chrome?.runtime
+    if (runtime) {
+      runtime.sendMessage({
+        type: 'API_EXTRACT_STATE_CHANGED',
+        active,
+      }).catch(() => {
+        // Ignore errors (e.g., no listener)
+      })
     }
   }
 
@@ -61,7 +78,6 @@ class ApiDocExtractor {
     document.addEventListener('mouseover', this.boundMouseOver, true)
     document.addEventListener('mouseout', this.boundMouseOut, true)
     document.addEventListener('click', this.boundClick, true)
-    document.addEventListener('keydown', this.boundKeyDown, true)
   }
 
   private disableSelection() {
@@ -69,15 +85,7 @@ class ApiDocExtractor {
     document.removeEventListener('mouseover', this.boundMouseOver, true)
     document.removeEventListener('mouseout', this.boundMouseOut, true)
     document.removeEventListener('click', this.boundClick, true)
-    document.removeEventListener('keydown', this.boundKeyDown, true)
     this.removeOverlay()
-  }
-
-  private handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      this.setSelectionMode(false)
-      this.showToast('已退出API文档提取模式')
-    }
   }
 
   private handleMouseOver(e: MouseEvent) {

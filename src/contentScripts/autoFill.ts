@@ -3,14 +3,14 @@ class AutoFillManager {
   private overlay: HTMLElement | null = null
   private boundMouseOver: (e: MouseEvent) => void
   private boundClick: (e: MouseEvent) => void
-  private boundKeyDown: (e: KeyboardEvent) => void
   private boundMouseOut: (e: MouseEvent) => void
+  private boundDocumentMouseLeave: (e: MouseEvent) => void
 
   constructor() {
     this.boundMouseOver = this.handleMouseOver.bind(this)
     this.boundMouseOut = this.handleMouseOut.bind(this)
     this.boundClick = this.handleClick.bind(this)
-    this.boundKeyDown = this.handleKeyDown.bind(this)
+    this.boundDocumentMouseLeave = this.handleDocumentMouseLeave.bind(this)
 
     this.setupMessageListener()
     this.setupWindowMessageListener()
@@ -22,10 +22,11 @@ class AutoFillManager {
     if (runtime) {
       runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
         if (message.type === 'TOGGLE_AUTO_FILL') {
-          // Runtime broadcast reaches all frames. We just toggle our own state.
+          // Support explicit target state or toggle
           // We DO NOT relay this here to avoid double-toggling in iframes.
-          this.setSelectionMode(!this.isSelecting)
-          sendResponse({ success: true })
+          const targetState = message.active !== undefined ? message.active : !this.isSelecting
+          this.setSelectionMode(targetState)
+          sendResponse({ success: true, active: this.isSelecting })
         }
         return false
       })
@@ -43,6 +44,16 @@ class AutoFillManager {
         else if (event.data.type === 'TRIGGER_AUTO_FILL') {
           this.fillForm(document.body, true)
         }
+        else if (event.data.type === 'AUTO_FILL_COMPLETED_IN_CHILD') {
+          // Child iframe completed filling, we should also exit selection mode
+          this.setSelectionMode(false)
+          // Relay to parent if we're also in an iframe
+          this.notifyParentFillCompleted()
+          // If we're the top frame, notify sidepanel
+          if (window === top) {
+            this.notifyStateChange(false)
+          }
+        }
       }
     })
   }
@@ -56,7 +67,7 @@ class AutoFillManager {
     if (this.isSelecting) {
       this.enableSelection()
       if (window === top) {
-        this.showToast('请点击要填充的表单区域 (按 Esc 退出)')
+        this.showToast('请点击要填充的表单区域 (再次点击图标退出)')
       }
     }
     else {
@@ -88,7 +99,11 @@ class AutoFillManager {
     document.addEventListener('mouseover', this.boundMouseOver, true)
     document.addEventListener('mouseout', this.boundMouseOut, true)
     document.addEventListener('click', this.boundClick, true)
-    document.addEventListener('keydown', this.boundKeyDown, true)
+
+    // In iframes, disable selection when mouse leaves the document area
+    if (window !== top) {
+      document.documentElement.addEventListener('mouseleave', this.boundDocumentMouseLeave)
+    }
   }
 
   private disableSelection() {
@@ -96,17 +111,11 @@ class AutoFillManager {
     document.removeEventListener('mouseover', this.boundMouseOver, true)
     document.removeEventListener('mouseout', this.boundMouseOut, true)
     document.removeEventListener('click', this.boundClick, true)
-    document.removeEventListener('keydown', this.boundKeyDown, true)
-    this.removeOverlay()
-  }
 
-  private handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      this.setSelectionMode(false)
-      if (window === top) {
-        this.showToast('已退出自动填充模式')
-      }
+    if (window !== top) {
+      document.documentElement.removeEventListener('mouseleave', this.boundDocumentMouseLeave)
     }
+    this.removeOverlay()
   }
 
   private handleMouseOver(e: MouseEvent) {
@@ -125,6 +134,38 @@ class AutoFillManager {
   private handleMouseOut(e: MouseEvent) {
     if (!e.relatedTarget) {
       this.removeOverlay()
+    }
+  }
+
+  /**
+   * When in an iframe and mouse leaves the document, disable selection mode.
+   * This prevents the bug where selection continues in parent frame
+   * after mouse moves out of iframe.
+   */
+  private handleDocumentMouseLeave(_e: MouseEvent) {
+    this.removeOverlay()
+    this.setSelectionMode(false)
+    this.notifyStateChange(false)
+  }
+
+  /**
+   * Notify sidepanel about auto-fill state change
+   */
+  private notifyStateChange(active: boolean, filled?: number) {
+    // Only notify from top frame to avoid duplicates
+    if (window !== top) {
+      return
+    }
+
+    const runtime = (window as any).browser?.runtime || (window as any).chrome?.runtime
+    if (runtime) {
+      runtime.sendMessage({
+        type: 'AUTO_FILL_STATE_CHANGED',
+        active,
+        filled,
+      }).catch(() => {
+        // Ignore errors (e.g., no listener)
+      })
     }
   }
 
@@ -169,10 +210,33 @@ class AutoFillManager {
     // Exit selection mode after selection
     this.setSelectionMode(false)
 
-    await this.fillForm(target)
+    const filledCount = await this.fillForm(target)
+
+    // Notify parent window if we're in an iframe
+    this.notifyParentFillCompleted()
+
+    // Notify sidepanel about state change and fill result
+    this.notifyStateChange(false, filledCount)
   }
 
-  private async fillForm(container: HTMLElement, silent = false) {
+  /**
+   * Notify parent window that filling is completed in this frame
+   * So the entire page can exit selection mode
+   */
+  private notifyParentFillCompleted() {
+    if (window !== top && window.parent) {
+      try {
+        window.parent.postMessage({
+          type: 'AUTO_FILL_COMPLETED_IN_CHILD',
+        }, '*')
+      }
+      catch {
+        // Ignore cross-origin errors
+      }
+    }
+  }
+
+  private async fillForm(container: HTMLElement, silent = false): Promise<number> {
     let filledCount = 0
 
     const isFillableInput = (el: Element): boolean => {
@@ -198,8 +262,7 @@ class AutoFillManager {
     }
     inputsAndTextareas = inputsAndTextareas.filter(isFillableInput)
 
-    // Separate generic inputs vs DatePickers
-    const datePickerInputs = inputsAndTextareas.filter(el => el.closest('.el-date-editor'))
+    // Filter out inputs that are inside date pickers (they will be handled separately)
     const standardInputs = inputsAndTextareas.filter(el => !el.closest('.el-date-editor'))
 
     // 1. Fill standard inputs
@@ -218,39 +281,101 @@ class AutoFillManager {
     })
 
     // 2. Handle Element Plus Date Pickers
-    for (const input of datePickerInputs) {
-      const el = input as HTMLInputElement
-      if (!el.value) {
-        const wrapper = el.closest('.el-date-editor') as HTMLElement
-        if (wrapper) {
-          // TODO: Investigate robust Element Plus DatePicker interaction. Current fallback works but UI simulation is flaky.
-          wrapper.click()
-          await this.wait(300)
+    // Find date editor wrappers directly to avoid processing range inputs separately
+    const processedDateEditors = new Set<HTMLElement>()
+    const dateEditors = Array.from(container.querySelectorAll('.el-date-editor')) as HTMLElement[]
 
-          const poppers = document.querySelectorAll('.el-popper[role="tooltip"][aria-hidden="false"]')
-          let dateSelected = false
-          if (poppers.length > 0) {
-            const lastPopper = poppers[poppers.length - 1]
-            const days = lastPopper.querySelectorAll('.el-date-table td.available')
+    for (const wrapper of dateEditors) {
+      // Skip if already processed (e.g., nested structure)
+      if (processedDateEditors.has(wrapper)) {
+        continue
+      }
+      processedDateEditors.add(wrapper)
+
+      // Skip disabled date pickers
+      if (wrapper.classList.contains('is-disabled')) {
+        continue
+      }
+
+      // Check if it's a range picker
+      const isRangePicker = wrapper.classList.contains('el-range-editor')
+      const inputs = wrapper.querySelectorAll('input') as NodeListOf<HTMLInputElement>
+
+      // Check if already has value
+      const hasValue = Array.from(inputs).some(input => input.value)
+      if (hasValue) {
+        continue
+      }
+
+      // Click to open the date picker
+      wrapper.click()
+      await this.wait(400)
+
+      // Try multiple selectors for different Element Plus versions
+      const popperSelectors = [
+        '.el-picker__popper:not([style*="display: none"])',
+        '.el-popper:not([style*="display: none"])',
+        '.el-date-range-picker',
+        '.el-date-picker',
+      ]
+
+      let dateSelected = false
+      for (const selector of popperSelectors) {
+        const poppers = document.querySelectorAll(selector)
+        if (poppers.length > 0) {
+          const lastPopper = poppers[poppers.length - 1] as HTMLElement
+          // Check if visible
+          if (lastPopper.offsetParent === null) {
+            continue
+          }
+
+          if (isRangePicker) {
+            // For range picker, need to select two dates
+            const tables = lastPopper.querySelectorAll('.el-date-table')
+            if (tables.length >= 1) {
+              // Select start date from first table
+              const startDays = tables[0].querySelectorAll('td.available:not(.disabled)')
+              if (startDays.length > 0) {
+                const startDay = startDays[Math.floor(startDays.length / 3)] as HTMLElement
+                startDay.click()
+                await this.wait(200)
+
+                // Select end date (pick a later date)
+                const endDays = (tables[1] || tables[0]).querySelectorAll('td.available:not(.disabled)')
+                if (endDays.length > 0) {
+                  const endDay = endDays[Math.floor(endDays.length * 2 / 3)] as HTMLElement
+                  endDay.click()
+                  dateSelected = true
+                  filledCount++
+                }
+              }
+            }
+          }
+          else {
+            // For regular date picker
+            const days = lastPopper.querySelectorAll('.el-date-table td.available:not(.disabled)')
             if (days.length > 0) {
               const randomDay = days[Math.floor(Math.random() * days.length)]
-              const span = randomDay.querySelector('span') || randomDay as HTMLElement
-              span.click()
+              const clickTarget = randomDay.querySelector('span') || randomDay as HTMLElement
+              clickTarget.click()
               dateSelected = true
               filledCount++
             }
           }
 
-          if (!dateSelected) {
-            const newValue = this.generateDate()
-            el.value = newValue
-            el.dispatchEvent(new Event('input', { bubbles: true }))
-            el.dispatchEvent(new Event('change', { bubbles: true }))
-            el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }))
-            el.dispatchEvent(new Event('blur', { bubbles: true }))
+          if (dateSelected) {
+            break
           }
         }
       }
+
+      // Fallback: close picker if still open but nothing selected
+      if (!dateSelected) {
+        // Press Escape to close
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      }
+
+      await this.wait(100)
     }
 
     // 3. Handle File Inputs (Avatar/Upload)
@@ -283,24 +408,73 @@ class AutoFillManager {
     const elSelects = allElements.filter(el => el.classList.contains('el-select'))
 
     for (const select of elSelects) {
-      if (select.classList.contains('is-disabled'))
+      if (select.classList.contains('is-disabled')) {
         continue
+      }
+
+      // Check if already has a selected value
+      // - Has .el-tag elements (multi-select with tags)
+      // - Has selected text that's NOT a placeholder (placeholder has is-transparent class)
+      // - Input has actual value
+      const hasTags = select.querySelector('.el-tag')
+      const placeholder = select.querySelector('.el-select__placeholder')
+      const hasPlaceholder = placeholder && placeholder.classList.contains('is-transparent')
+      const inputEl = select.querySelector('input.el-select__input') as HTMLInputElement
+      const hasInputValue = inputEl && inputEl.value && !inputEl.classList.contains('is-hidden')
+
+      // If has tags OR has non-placeholder content OR input has value -> skip
+      if (hasTags || (!hasPlaceholder && placeholder) || hasInputValue) {
+        continue
+      }
 
       const trigger = select.querySelector('.el-select__wrapper') || select.querySelector('.el-input') || select
       if (trigger) {
         (trigger as HTMLElement).click()
-        await this.wait(300)
+        await this.wait(400)
 
-        const poppers = document.querySelectorAll('.el-select__popper[aria-hidden="false"]')
-        if (poppers.length > 0) {
-          const lastPopper = poppers[poppers.length - 1]
-          const options = lastPopper.querySelectorAll('.el-select-dropdown__item:not(.is-disabled)')
-          if (options.length > 0) {
-            const randomOption = options[Math.floor(Math.random() * options.length)] as HTMLElement
-            randomOption.scrollIntoView({ block: 'nearest' })
-            randomOption.click()
-            filledCount++
+        // Try multiple selectors for different Element Plus versions
+        const popperSelectors = [
+          '.el-select__popper:not([style*="display: none"])',
+          '.el-popper:not([style*="display: none"])',
+        ]
+
+        let filled = false
+        for (const popperSelector of popperSelectors) {
+          const poppers = document.querySelectorAll(popperSelector)
+          if (poppers.length > 0) {
+            const lastPopper = poppers[poppers.length - 1] as HTMLElement
+            // Check if visible
+            if (lastPopper.offsetParent === null) {
+              continue
+            }
+
+            // Try multiple option selectors
+            const optionSelectors = [
+              '.el-select-dropdown__item:not(.is-disabled):not(.is-selected)',
+              '.el-option:not(.is-disabled):not(.selected)',
+            ]
+
+            for (const optionSelector of optionSelectors) {
+              const options = lastPopper.querySelectorAll(optionSelector)
+              if (options.length > 0) {
+                const randomOption = options[Math.floor(Math.random() * options.length)] as HTMLElement
+                randomOption.scrollIntoView({ block: 'nearest' })
+                randomOption.click()
+                filledCount++
+                filled = true
+                break
+              }
+            }
+
+            if (filled) {
+              break
+            }
           }
+        }
+
+        if (!filled) {
+          // Close popper if still open
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
         }
       }
       await this.wait(100)
@@ -310,19 +484,27 @@ class AutoFillManager {
     const elCascaders = allElements.filter(el => el.classList.contains('el-cascader'))
 
     for (const cascader of elCascaders) {
-      if (cascader.classList.contains('is-disabled'))
+      if (cascader.classList.contains('is-disabled')) {
         continue
+      }
+
+      // Check if already has a selected value
+      const selectedTags = cascader.querySelectorAll('.el-tag, .el-cascader__label')
+      const inputEl = cascader.querySelector('input') as HTMLInputElement
+      if (selectedTags.length > 0 || (inputEl && inputEl.value)) {
+        continue
+      }
 
       const trigger = cascader.querySelector('.el-input') || cascader
       if (trigger) {
         (trigger as HTMLElement).click()
         await this.wait(300)
 
-        const poppers = document.querySelectorAll('.el-cascader__dropdown:not([style*="display: none"])')
+        const poppers = document.querySelectorAll('.el-cascader__dropdown:not([style*="display: none"]), .el-popper.el-cascader__dropdown')
         if (poppers.length > 0) {
           const lastPopper = poppers[poppers.length - 1] as HTMLElement
 
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 5; i++) {
             const menus = lastPopper.querySelectorAll('.el-cascader-menu')
             if (menus.length === 0)
               break
@@ -339,19 +521,38 @@ class AutoFillManager {
 
             const randomItem = items[Math.floor(Math.random() * items.length)] as HTMLElement
 
-            const labelSpan = randomItem.querySelector('.el-cascader-node__label') as HTMLElement || randomItem
-            labelSpan.click()
-            await this.wait(200)
+            // Check if this is a leaf node using aria-haspopup attribute
+            const isLeaf = randomItem.getAttribute('aria-haspopup') === 'false'
 
-            // Check if it was a leaf node
-            if (!randomItem.querySelector('.el-icon-arrow-right') && !randomItem.querySelector('.el-cascader-node__postfix')) {
-              filledCount++
-              if (document.body.contains(lastPopper) && lastPopper.style.display !== 'none') {
-                (trigger as HTMLElement).click()
+            if (isLeaf) {
+              // Click the radio input to select and trigger close
+              const radioInput = randomItem.querySelector('input[type="radio"]') as HTMLInputElement
+              if (radioInput) {
+                radioInput.click()
               }
+              else {
+                // Fallback to clicking the label
+                const labelSpan = randomItem.querySelector('.el-cascader-node__label') as HTMLElement
+                if (labelSpan) {
+                  labelSpan.click()
+                }
+              }
+              filledCount++
               break
             }
+            else {
+              // Not a leaf, click to expand
+              const labelSpan = randomItem.querySelector('.el-cascader-node__label') as HTMLElement || randomItem
+              labelSpan.click()
+              await this.wait(200)
+            }
           }
+
+          // Ensure dropdown is closed after selection
+          await this.wait(100)
+          // Send mouseup event to close dropdown (works for Element Plus cascader)
+          document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+          document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
         }
       }
       await this.wait(100)
@@ -386,6 +587,8 @@ class AutoFillManager {
         this.showToast(resultMsg)
       }
     }
+
+    return filledCount
   }
 
   private findLabel(el: HTMLElement): string {
