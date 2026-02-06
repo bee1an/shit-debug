@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import SearchComponent from './components/SearchComponent.vue'
 import IframeComponent from './components/IframeComponent.vue'
 import MessageComponent from './components/MessageComponent.vue'
-import SettingsPage from './SettingsPage.vue'
+import BaseInput from './components/BaseInput.vue'
 import { usePopupSettings } from '~/composables/usePopupSettings'
 import { getAndParseOpenKey, hasValidOpenKeyConfig } from '~/utils/openKey'
 
-// 页面状态管理
-const currentView = ref<'main' | 'settings'>('main')
-
 // 使用设置管理composable
-const { initSettings } = usePopupSettings()
+const {
+  settings,
+  updateHostPrefix,
+  initSettings,
+} = usePopupSettings()
+
+// Host配置状态
+const hostInput = ref('')
+const isHostSaving = ref(false)
+
+// 监听settings变化，同步到输入框
+watch(() => settings.value.hostPrefix, (newHostPrefix) => {
+  hostInput.value = newHostPrefix
+}, { immediate: true })
 
 // 组件引用
 const searchComponentRef = ref<InstanceType<typeof SearchComponent>>()
@@ -332,14 +342,34 @@ function handleCopyContent(_content: string) {
   // console.log('Copy content:', content)
 }
 
-// 导航到设置页面
-function navigateToSettings() {
-  currentView.value = 'settings'
+/**
+ * 保存Host配置
+ */
+async function handleSaveHost() {
+  if (isHostSaving.value || !hostInput.value.trim())
+    return
+
+  isHostSaving.value = true
+
+  try {
+    await updateHostPrefix(hostInput.value.trim())
+    message.value = 'Host配置已保存'
+  }
+  catch {
+    message.value = 'Host配置保存失败'
+  }
+  finally {
+    isHostSaving.value = false
+  }
 }
 
-// 从设置页面返回
-function handleBackFromSettings() {
-  currentView.value = 'main'
+/**
+ * 处理Host输入键盘事件
+ */
+function handleHostKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    handleSaveHost()
+  }
 }
 
 // 点击页面其他地方处理
@@ -422,6 +452,40 @@ onMounted(async () => {
   >
     <!-- 内容区域 - 可滚动 -->
     <div class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+      <!-- Host前缀配置 -->
+      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-gray-600 whitespace-nowrap">
+            Host
+          </label>
+          <BaseInput
+            v-model="hostInput"
+            type="url"
+            placeholder="http://localhost:4000"
+            class="flex-1"
+            :disabled="isHostSaving"
+            @keydown="handleHostKeydown"
+          />
+          <button
+            class="px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap"
+            :class="isHostSaving
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-gray-900 text-white hover:bg-black shadow-sm hover:shadow-md active:scale-[0.98]'"
+            :disabled="isHostSaving || !hostInput.trim()"
+            @click="handleSaveHost"
+          >
+            <svg v-if="isHostSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <svg v-else class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>保存</span>
+          </button>
+        </div>
+      </section>
+
       <!-- 搜索功能组件 -->
       <section>
         <SearchComponent
@@ -584,28 +648,9 @@ onMounted(async () => {
           </svg>
           <span>OpenKey</span>
         </button>
-
-        <!-- 设置按钮 -->
-        <button
-          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
-          title="设置"
-          @click="navigateToSettings"
-        >
-          <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
       </div>
     </div>
   </main>
-
-  <!-- 设置页面 -->
-  <Transition name="slide-up">
-    <div v-if="currentView === 'settings'" class="absolute inset-0 z-20 bg-gray-50">
-      <SettingsPage @back="handleBackFromSettings" />
-    </div>
-  </Transition>
 </template>
 
 <style scoped>
