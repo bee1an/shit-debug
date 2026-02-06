@@ -2,16 +2,6 @@ import { ref } from 'vue'
 import { usePopupSettings } from './usePopupSettings'
 import { type OpenKeyParseResult, getAndParseOpenKey, hasValidOpenKeyConfig, replaceOpenKeyInUrl } from '~/utils/openKey'
 
-// Chrome API类型声明
-declare const chrome: {
-  scripting: {
-    executeScript: (params: {
-      target: { tabId: number }
-      func: () => any
-    }) => Promise<Array<{ result: any }>>
-  }
-}
-
 export interface IframeInfo {
   index: number
   src?: string
@@ -108,64 +98,66 @@ export function useIframeDetector() {
         throw new Error('无法获取当前标签页信息')
       }
 
-      const [result] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: async () => {
+      // 在所有 frame 中执行脚本，获取每个 frame 的 document.location
+      const results = await browser.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        func: () => {
           try {
-            const iframes = document.querySelectorAll('iframe')
-            const count = iframes.length
-
-            if (count === 0) {
-              return { count: 0, iframes: [] }
-            }
-
-            const iframeResults: { index: number, src?: string, hashContent?: string }[] = []
-
-            // 获取所有iframe的信息
-            for (let i = 0; i < iframes.length; i++) {
-              const iframe = iframes[i] as HTMLIFrameElement
-              const src = iframe.src || ''
-
-              let hashContent = ''
-              if (src && src.includes('#')) {
-                try {
-                  const url = new URL(src)
-                  hashContent = url.hash
-                }
-                catch {
-                  // URL解析失败，跳过hash提取
-                }
-              }
-
-              iframeResults.push({
-                index: i,
-                src,
-                hashContent: hashContent || undefined,
-              })
-            }
+            // 返回当前 frame 的 location 信息
+            const href = window.location.href
+            const hash = window.location.hash
+            const isTopFrame = window === window.top
 
             return {
-              count,
-              iframes: iframeResults,
+              href,
+              hash,
+              isTopFrame,
             }
           }
           catch {
-            return { count: 0, iframes: [] }
+            return null
           }
         },
       })
 
-      const basicResult = result.result as IframeDetectionResult || { count: 0, iframes: [] }
+      // 按 frameId 排序，确保顺序一致（frameId 较小的通常是较早创建的 frame）
+      const sortedResults = [...results].sort((a, b) => (a.frameId ?? 0) - (b.frameId ?? 0))
+
+      // 过滤掉顶层 frame 和无效结果，只保留 iframe 内部的 document
+      const iframeResults: { index: number, src?: string, hashContent?: string }[] = []
+
+      let frameIndex = 0
+      for (const result of sortedResults) {
+        const frameInfo = result.result as { href: string, hash: string, isTopFrame: boolean } | null
+
+        // 跳过顶层 frame 和无效结果
+        if (!frameInfo || frameInfo.isTopFrame) {
+          continue
+        }
+
+        iframeResults.push({
+          index: frameIndex,
+          src: frameInfo.href,
+          hashContent: frameInfo.hash || undefined,
+        })
+        frameIndex++
+      }
+
+      const count = iframeResults.length
+
+      if (count === 0) {
+        return { count: 0, iframes: [] }
+      }
 
       // 为每个iframe处理openKey
       const processedIframes: IframeInfo[] = []
-      for (const iframe of basicResult.iframes) {
+      for (const iframe of iframeResults) {
         const processedIframe = await processIframeWithOpenKey(iframe)
         processedIframes.push(processedIframe)
       }
 
       return {
-        count: basicResult.count,
+        count,
         iframes: processedIframes,
       }
     }
