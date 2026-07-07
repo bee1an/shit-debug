@@ -10,7 +10,7 @@ import { getArrayFromStorage, saveArrayToStorage } from '../utils/storage'
  * @returns 响应式引用对象
  */
 export function useReactiveStorage<T>(key: string, defaultValue: T[]): Ref<T[]> {
-  const data = ref<T[]>(defaultValue)
+  const data = ref<T[]>(defaultValue) as Ref<T[]>
 
   // 初始化加载数据
   async function loadData() {
@@ -67,5 +67,5 @@ export function useReactiveStorage<T>(key: string, defaultValue: T[]): Ref<T[]> 
     browser.storage.onChanged.removeListener(handleStorageChangeBound)
   })
 
-  return data as Ref<T[]>
+  return data
 }
