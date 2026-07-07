@@ -232,9 +232,9 @@ class ApiDocExtractor {
     else if (tagName === 'ul') {
       // 遍历所有直接子li
       const directLis = element.querySelectorAll(':scope > li')
-      for (const li of directLis) {
+      directLis.forEach((li) => {
         leafLis.push(...this.getLeafLis(li as HTMLElement))
-      }
+      })
     }
 
     return leafLis
@@ -293,9 +293,10 @@ class ApiDocExtractor {
     while (Date.now() - startTime < timeout) {
       // 查找包含"复制页面"文本的按钮
       const buttons = document.querySelectorAll('button')
-      for (const button of buttons) {
+      for (let i = 0; i < buttons.length; i++) {
+        const button = buttons[i]
         if (button.textContent?.includes('复制页面') && !button.disabled) {
-          return button as HTMLButtonElement
+          return button
         }
       }
       await this.wait(200)
