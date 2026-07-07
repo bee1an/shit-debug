@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@floating-ui/vue':
+        specifier: ^2.0.0
+        version: 2.0.0(vue@3.4.38(typescript@5.5.4))
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
@@ -680,6 +683,20 @@ packages:
     resolution: {integrity: sha512-YPu4qv8Z6+AoVxS/Ovxd9bfIWltJnUjDTf9Y2FOSWOc4JaLWRiCagkCt0VA3pGyiGHlY/Gpki+XejMuBRxm/mw==}
     engines: {node: '>= 18.0'}
     hasBin: true
+
+  '@floating-ui/core@1.7.5':
+    resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
+
+  '@floating-ui/dom@1.7.6':
+    resolution: {integrity: sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==}
+
+  '@floating-ui/utils@0.2.11':
+    resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@floating-ui/vue@2.0.0':
+    resolution: {integrity: sha512-I7hYpCAkgBrtXdZbfCpGaqAV+E09fENSHBIm81z6WhSgcl1ctkb3+1gW9h8PVDus0Em2FwGRR41epgxILS6YhQ==}
+    peerDependencies:
+      vue: '>=3.3.0'
 
   '@fluent/syntax@0.19.0':
     resolution: {integrity: sha512-5D2qVpZrgpjtqU4eNOcWGp1gnUCgjfM+vKGE2y03kKN6z5EBhtx0qdRFbg8QuNNj8wXNoX93KJoYb+NqoxswmQ==}
@@ -5121,6 +5138,23 @@ snapshots:
       progress: 2.0.3
     transitivePeerDependencies:
       - typescript
+
+  '@floating-ui/core@1.7.5':
+    dependencies:
+      '@floating-ui/utils': 0.2.11
+
+  '@floating-ui/dom@1.7.6':
+    dependencies:
+      '@floating-ui/core': 1.7.5
+      '@floating-ui/utils': 0.2.11
+
+  '@floating-ui/utils@0.2.11': {}
+
+  '@floating-ui/vue@2.0.0(vue@3.4.38(typescript@5.5.4))':
+    dependencies:
+      '@floating-ui/dom': 1.7.6
+      '@floating-ui/utils': 0.2.11
+      vue: 3.4.38(typescript@5.5.4)
 
   '@fluent/syntax@0.19.0': {}
 
