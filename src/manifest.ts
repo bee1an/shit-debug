@@ -42,6 +42,7 @@ export async function getManifest() {
       'webRequest',
       'sidePanel',
       'downloads',
+      'declarativeNetRequest',
     ],
     host_permissions: ['*://*/*'],
     content_scripts: [

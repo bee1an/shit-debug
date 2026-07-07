@@ -14,7 +14,47 @@ browser.runtime.onInstalled.addListener((): void => {
   if (browserAny.sidePanel) {
     browserAny.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   }
+  installDnrRules()
 })
+
+// 启动时也注册一次，防止 service worker 重启后规则丢失
+installDnrRules()
+
+/**
+ * 伪装 Origin/Referer：扩展 sidepanel 发给 cdszzx.tfsmy.com 的请求
+ * 会被浏览器强制带上 chrome-extension:// 形式的 Origin，后端直接 403。
+ * 用 declarativeNetRequest 动态规则改写为同源。
+ */
+function installDnrRules(): void {
+  const dnr = (browser as any).declarativeNetRequest
+  if (!dnr || typeof dnr.updateDynamicRules !== 'function')
+    return
+
+  const rule = {
+    id: 1001,
+    priority: 1,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        { header: 'origin', operation: 'set', value: 'https://cdszzx.tfsmy.com' },
+        { header: 'referer', operation: 'set', value: 'https://cdszzx.tfsmy.com/frontend/bud-cloud-governance-frontend-b/' },
+      ],
+    },
+    condition: {
+      urlFilter: '||cdszzx.tfsmy.com/',
+      resourceTypes: ['xmlhttprequest'],
+      // 仅修改扩展自身发起的请求（initiatorDomains 不含页面来源，就是 extension 自己发的）
+      initiatorDomains: [browser.runtime.id],
+    },
+  }
+
+  dnr.updateDynamicRules({
+    removeRuleIds: [1001],
+    addRules: [rule],
+  }).catch((err: any) => {
+    console.error('[DNR] updateDynamicRules failed:', err)
+  })
+}
 
 // 点击扩展图标时打开 sidepanel (备用方案)
 browser.action.onClicked.addListener(async (tab) => {
@@ -59,16 +99,41 @@ onMessage('get-iframe-session-storage', async () => {
   return { success: false, error: '此功能已移至content script处理' }
 })
 
+// 捕获 bootstrap apiKey：任意一次 openKey 接口请求即可获取
+// 后续所有区划的 openKey 都通过 switch 接口换新 apiKey 得到
+interface BootstrapApiKey {
+  apiKey: string
+  ts: number
+}
+
+const BOOTSTRAP_API_KEY = 'bootstrap_api_key'
+
+function pickHeader(headers: { name: string, value?: string }[] | undefined, name: string): string | undefined {
+  if (!headers)
+    return undefined
+  const lower = name.toLowerCase()
+  const hit = headers.find(h => h.name.toLowerCase() === lower)
+  return hit?.value
+}
+
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
-    // 获取请求头
+    const headers = details.requestHeaders
+    const apiKey = pickHeader(headers, 'api-key') ?? pickHeader(headers, 'apikey')
+
+    // 保留旧字段避免破坏既有调用方
     browser.storage.local.set({
       key_req_host: {
         url: details.url,
-        headers: JSON.stringify(details.requestHeaders),
+        headers: JSON.stringify(headers),
       },
     })
-    // 可以在此对请求头进行修改
+
+    if (apiKey) {
+      const entry: BootstrapApiKey = { apiKey, ts: Date.now() }
+      browser.storage.local.set({ [BOOTSTRAP_API_KEY]: entry })
+    }
+
     return details
   },
   { urls: ['https://cdszzx.tfsmy.com/cbase/bud-cloud-governance-biz/openKey/key*'] },
