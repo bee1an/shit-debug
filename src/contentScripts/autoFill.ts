@@ -263,7 +263,8 @@ class AutoFillManager {
     inputsAndTextareas = inputsAndTextareas.filter(isFillableInput)
 
     // Filter out inputs that are inside date pickers (they will be handled separately)
-    const standardInputs = inputsAndTextareas.filter(el => !el.closest('.el-date-editor'))
+    // and inputs that belong to el-select (its inner filter input must not be filled as text).
+    const standardInputs = inputsAndTextareas.filter(el => !el.closest('.el-date-editor') && !el.closest('.el-select'))
 
     // 1. Fill standard inputs
     standardInputs.forEach((input) => {
@@ -307,8 +308,20 @@ class AutoFillManager {
         continue
       }
 
-      // Click to open the date picker
-      wrapper.click()
+      // Click to open the date picker.
+      // Newer Element Plus listens on `mousedown` of the inner input, not `click` on the wrapper,
+      // so a plain `wrapper.click()` leaves the popper hidden. Dispatch the full pointer sequence
+      // on the inner input to reliably open the panel across versions.
+      const dateInput = wrapper.querySelector('input') as HTMLInputElement
+      if (dateInput) {
+        dateInput.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        dateInput.focus()
+        dateInput.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+        dateInput.click()
+      }
+      else {
+        wrapper.click()
+      }
       await this.wait(400)
 
       // Try multiple selectors for different Element Plus versions
@@ -630,7 +643,7 @@ class AutoFillManager {
       return `test${this.generateRandomString(4)}@example.com`
     }
 
-    if (/身份证|id/i.test(text)) {
+    if (/身份证|id-card|idcard/i.test(text)) {
       return `11010119900307${Math.floor(1000 + Math.random() * 9000)}`
     }
 
@@ -642,7 +655,10 @@ class AutoFillManager {
       return Math.floor(18 + Math.random() * 40).toString()
     }
 
-    return `测试${this.generateRandomString(4)}`
+    // Fallback: prefix with the field label so the source of the filled value is recognizable,
+    // e.g. "人物简介-测试abcd". Fall back to a bare string when the label is unavailable.
+    const fallback = `测试${this.generateRandomString(4)}`
+    return text ? `${text}-${fallback}` : fallback
   }
 
   private generatePhone() {
